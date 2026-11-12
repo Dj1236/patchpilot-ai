@@ -224,7 +224,7 @@ def test_exiting_with_success_before_the_tests_run_is_untrustworthy(
     strict=True,
     reason=(
         "Known V1 limitation: code under test runs in the same process as pytest "
-        "and can forge the report and the exit status together. See docs/sandbox.md."
+        "and can forge the report and the exit status together. See docs/grading-integrity.md."
     ),
 )
 def test_in_process_forgery_of_report_and_exit_status_is_detected(
