@@ -69,6 +69,8 @@ _BACKSTOP_SECONDS = 120
 # Exit codes that come from docker itself, not from the process it started.
 _DOCKER_FAILURE_CODES = frozenset({125, 126, 127})
 _KILLED_EXIT_CODE = 137
+# /dev/shm stays available for multiprocessing primitives, but small.
+_SHM_MB = 8
 
 _PYTEST_EXIT_STATUS = {
     0: SandboxStatus.PASSED,
@@ -175,6 +177,8 @@ def build_run_argv(name: str, image: str, limits: SandboxLimits) -> list[str]:
         "nofile=1024:1024",
         "--ipc",
         "private",
+        "--shm-size",
+        f"{_SHM_MB}m",
         "--hostname",
         "sandbox",
         "--workdir",

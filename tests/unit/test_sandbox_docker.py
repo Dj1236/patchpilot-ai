@@ -51,6 +51,8 @@ def test_run_command_applies_every_restriction() -> None:
     assert ("--cpus", "0.5") in pairs
     assert ("--pids-limit", "64") in pairs
     assert ("--pull", "never") in pairs
+    assert ("--shm-size", "8m") in pairs
+    assert ("--ipc", "private") in pairs
     scratch = {b.split(":")[0]: b for a, b in pairs if a == "--tmpfs"}
     assert sorted(scratch) == [TMP_DIR, WORKSPACE_DIR]
     assert "size=32m" in scratch[WORKSPACE_DIR]
