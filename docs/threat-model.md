@@ -37,6 +37,13 @@ instructions in a model prompt.
 | Runaway spend | Hard caps on attempts, tool calls, tokens, cost and time. |
 | Malicious report content | Untrusted text is escaped in reports and in any pull request body. |
 
+## Implementation status
+
+The sandbox controls in the table above are implemented and verified by
+tests that attack a real container; see [sandbox.md](sandbox.md) for the
+control-by-control evidence and the remaining limitations. Intake, patch
+policy, GitHub access and spend caps arrive in later milestones.
+
 ## The add-only test rule
 
 V1 patches may add regression tests. They may not modify or delete existing

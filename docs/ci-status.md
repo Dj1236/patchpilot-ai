@@ -31,6 +31,9 @@ uv run mypy
 uv run pytest
 ```
 
+Since Milestone 3 this includes the sandbox tests, which run real containers
+through Colima.
+
 ## What local verification does not cover
 
 - **Linux is the reference environment for the sandbox**, and it has not
@@ -44,6 +47,7 @@ uv run pytest
 
 1. Resolve the account restriction.
 2. Push a commit and confirm the `CI` workflow completes successfully.
-3. Add a job that runs the sandbox tests (`pytest -m sandbox`) on the Linux
-   runner.
+3. Confirm in the run log that the sandbox tests ran on the Linux runner
+   and were not skipped. The workflow's `pytest` step includes them whenever
+   a Docker engine is reachable.
 4. Update this file and the milestone table in the README.

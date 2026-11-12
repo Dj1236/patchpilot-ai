@@ -10,14 +10,14 @@ report for a human to accept or reject.
 
 ## Status
 
-Early development. The project foundation is in place: packaging, linting,
-type checking, tests and CI. No agent functionality exists yet.
+Early development. The foundation, the restricted test sandbox and the
+evaluation task format are in place. No agent functionality exists yet.
 
 | Milestone | State |
 |---|---|
 | 1. Specification | Done |
 | 2. Foundation | Built; CI gate not passed ([details](docs/ci-status.md)) |
-| 3. Sandbox and task format | Not started |
+| 3. Sandbox and task format | Built and verified locally; not yet run on Linux CI |
 | 4. Intake and repository tools | Not started |
 | 5. Baseline end to end, plus evaluator | Not started |
 | 6. Stateful repair loop | Not started |
@@ -29,6 +29,8 @@ type checking, tests and CI. No agent functionality exists yet.
 - [Specification](docs/spec.md)
 - [Threat model](docs/threat-model.md)
 - [Technology decisions](docs/decisions.md)
+- [Sandbox](docs/sandbox.md)
+- [Evaluation tasks](docs/evaluation-tasks.md)
 - [Third-party licenses](docs/third-party-licenses.md)
 - [CI status](docs/ci-status.md)
 
@@ -43,6 +45,9 @@ uv run pre-commit install
 uv run pytest
 uv run patchpilot version
 ```
+
+Tests marked `sandbox` need a running Docker engine (on macOS: `colima
+start`). Without one they are skipped, not passed.
 
 Checks that must pass before a change is merged:
 
