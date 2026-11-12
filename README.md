@@ -16,7 +16,7 @@ type checking, tests and CI. No agent functionality exists yet.
 | Milestone | State |
 |---|---|
 | 1. Specification | Done |
-| 2. Foundation | Done |
+| 2. Foundation | Built; CI gate not passed ([details](docs/ci-status.md)) |
 | 3. Sandbox and task format | Not started |
 | 4. Intake and repository tools | Not started |
 | 5. Baseline end to end, plus evaluator | Not started |
@@ -30,6 +30,7 @@ type checking, tests and CI. No agent functionality exists yet.
 - [Threat model](docs/threat-model.md)
 - [Technology decisions](docs/decisions.md)
 - [Third-party licenses](docs/third-party-licenses.md)
+- [CI status](docs/ci-status.md)
 
 ## Development
 
