@@ -17,8 +17,9 @@ the evaluator.
 import ast
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
@@ -29,7 +30,12 @@ from patchpilot.tasks.integrity import (
     is_protected,
     is_test_path,
 )
-from patchpilot.tasks.schema import INTERNAL_DIR, FixtureRepository, Task
+from patchpilot.tasks.schema import INTERNAL_DIR, FixtureRepository, GitRepository, Task
+
+if TYPE_CHECKING:
+    # Imported for type checking only: the repo package itself depends on
+    # this package's schema.
+    from patchpilot.repo.snapshot import RepositorySnapshot
 
 TASK_FILE = "task.toml"
 _MAX_TASK_FILE_BYTES = 65_536
@@ -45,18 +51,21 @@ class LoadedTask:
 
     task: Task
     root: Path
-
-    def _repository_dir(self) -> Path:
-        repository = self.task.repository
-        if not isinstance(repository, FixtureRepository):
-            raise TaskError(
-                f"task {self.task.task_id}: fetching git repositories arrives with Milestone 4"
-            )
-        return self.root / repository.path
+    # Files of the pinned commit, for a task whose repository lives on GitHub.
+    # Set only by ``attach_snapshot`` after the commit has been verified.
+    repository_files: Mapping[str, bytes] | None = None
 
     def agent_files(self) -> dict[str, bytes]:
         """Return the starting repository state, the only files an agent may see."""
-        return _collect(self._repository_dir(), self.task.task_id)
+        repository = self.task.repository
+        if isinstance(repository, FixtureRepository):
+            return _collect(self.root / repository.path, self.task.task_id)
+        if self.repository_files is None:
+            raise TaskError(
+                f"task {self.task.task_id}: its repository must be fetched first; "
+                "use attach_snapshot with a snapshot of the pinned commit"
+            )
+        return dict(self.repository_files)
 
     def hidden_test_files(self) -> dict[str, bytes]:
         return _collect(self.root / self.task.evaluation.hidden_tests_dir, self.task.task_id)
@@ -93,13 +102,13 @@ def _check_files(loaded: LoadedTask) -> None:
     if any(path == INTERNAL_DIR or path.startswith(INTERNAL_DIR + "/") for path in repository):
         raise TaskError(f"task {task.task_id}: the repository contains an '{INTERNAL_DIR}' folder")
 
-    assert isinstance(task.repository, FixtureRepository)  # noqa: S101 - narrowed by agent_files
-    actual = tree_digest(repository)
-    if actual != task.repository.tree_sha256:
-        raise TaskError(
-            f"task {task.task_id}: repository content does not match its pin "
-            f"(expected {task.repository.tree_sha256}, found {actual})"
-        )
+    if isinstance(task.repository, FixtureRepository):
+        actual = tree_digest(repository)
+        if actual != task.repository.tree_sha256:
+            raise TaskError(
+                f"task {task.task_id}: repository content does not match its pin "
+                f"(expected {task.repository.tree_sha256}, found {actual})"
+            )
 
     hidden = loaded.hidden_test_files()
     if not hidden:
@@ -199,8 +208,31 @@ def load_task(task_dir: Path) -> LoadedTask:
             f"task_id {task.task_id!r} does not match its directory name {task_dir.name!r}"
         )
     loaded = LoadedTask(task=task, root=task_dir)
-    _check_files(loaded)
+    if isinstance(task.repository, FixtureRepository):
+        _check_files(loaded)
     return loaded
+
+
+def attach_snapshot(loaded: LoadedTask, snapshot: "RepositorySnapshot") -> LoadedTask:
+    """Give a task with a GitHub repository the files of its pinned commit.
+
+    The snapshot must be of exactly the repository and commit the task pins.
+    The same checks that run for a fixture task when it is loaded then run
+    here, against the fetched files.
+    """
+    repository = loaded.task.repository
+    if not isinstance(repository, GitRepository):
+        raise TaskError(f"task {loaded.task.task_id}: only tasks with a git repository take one")
+    if snapshot.url.lower() != repository.url.lower():
+        raise TaskError(f"task {loaded.task.task_id}: the snapshot is of a different repository")
+    if snapshot.commit_sha != repository.commit_sha:
+        raise TaskError(
+            f"task {loaded.task.task_id}: the snapshot is of commit {snapshot.commit_sha}, "
+            f"but the task pins {repository.commit_sha}"
+        )
+    attached = replace(loaded, repository_files=dict(snapshot.files))
+    _check_files(attached)
+    return attached
 
 
 def discover_tasks(tasks_root: Path) -> list[LoadedTask]:
