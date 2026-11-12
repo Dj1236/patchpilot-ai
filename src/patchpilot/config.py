@@ -22,7 +22,13 @@ class Settings(BaseSettings):
         description="Paid model calls are made only when this is explicitly enabled.",
     )
     max_attempts: int = Field(default=3, ge=1, le=10)
-    max_cost_usd: float = Field(default=10.0, gt=0)
+    max_cost_usd: float = Field(
+        default=5.0,
+        gt=0,
+        description="Total spend allowed across all runs recorded in the ledger.",
+    )
+    run_cap_usd: float = Field(default=0.75, gt=0, description="Spend allowed for one run.")
+    runs_dir: Path = Field(default=Path("runs"), description="Where traces and reports go.")
     allowlist_path: Path | None = Field(
         default=None,
         description="TOML file of approved repositories. Without it nothing is approved.",

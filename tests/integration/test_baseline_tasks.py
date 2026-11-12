@@ -284,3 +284,29 @@ def test_an_evaluation_reports_counts_for_every_run(sandbox: DockerSandbox, tmp_
     assert summary.resolved == 1 and summary.verified_but_not_resolved == 0
     assert "Resolved by hidden tests: 1 of 2" in table
     assert "not graded" in table and "Proposals that could not be applied: 1" in table
+
+
+def test_the_run_command_replays_a_trace_end_to_end(
+    sandbox: DockerSandbox, cachekit: LoadedTask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from typer.testing import CliRunner
+
+    import patchpilot.cli as cli
+
+    _, directory = _run(
+        cachekit,
+        ScriptedModel([*EXPLORE, final_turn(cache_proposal())]),
+        sandbox,
+        tmp_path / "recorded",
+    )
+    monkeypatch.setenv("PATCHPILOT_RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.setattr(cli, "_live_model", lambda: pytest.fail("a live model was requested"))
+
+    result = CliRunner().invoke(
+        cli.app, ["run", "--task", "inj-001-cachekit", "--replay", str(directory / TRACE_FILE)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "status: candidate_verified" in result.output
+    assert "hidden tests: resolved" in result.output
+    assert "cost: $0." in result.output

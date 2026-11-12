@@ -9,7 +9,8 @@ def test_defaults_never_enable_paid_calls() -> None:
 
     assert settings.live is False
     assert settings.model_id == "claude-sonnet-5-5"
-    assert settings.max_cost_usd == 10.0
+    assert settings.max_cost_usd == 5.0
+    assert settings.run_cap_usd == 0.75
 
 
 def test_environment_overrides_use_the_patchpilot_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
