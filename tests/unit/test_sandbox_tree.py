@@ -81,6 +81,18 @@ def test_a_named_pipe_is_rejected_without_blocking(tmp_path: Path) -> None:
         collect_tree(tmp_path)
 
 
+def test_an_unreadable_directory_is_an_error_not_a_silent_gap(tmp_path: Path) -> None:
+    _write(tmp_path, "mod.py")
+    locked = tmp_path / "locked"
+    _write(locked, "hidden.py")
+    locked.chmod(0o000)
+    try:
+        with pytest.raises(TreeError, match="cannot read directory"):
+            collect_tree(tmp_path)
+    finally:
+        locked.chmod(0o755)
+
+
 def test_an_oversized_file_is_rejected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tree, "MAX_FILE_BYTES", 8)
     _write(tmp_path, "big.py", "x" * 9)

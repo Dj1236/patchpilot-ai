@@ -264,6 +264,19 @@ def test_new_runner_configuration_is_dropped_and_flagged(path: str) -> None:
     assert tree.tampered == (path,)
 
 
+def test_compiled_files_planted_next_to_tests_never_reach_grading() -> None:
+    planted = {
+        "tests/__pycache__/test_core.cpython-312.pyc": b"\x00",
+        "tests/__pycache__/test_hidden.cpython-312-pytest-9.2.0.pyc": b"\x00",
+        "tests/__pycache__/conftest.cpython-312.pyc": b"\x00",
+    }
+
+    tree = build_evaluation_tree(ORIGINAL, {**ORIGINAL, **planted}, HIDDEN)
+
+    assert not set(planted) & set(tree.files)
+    assert tree.ignored == tuple(sorted(planted))
+
+
 def test_new_test_files_are_left_out_without_counting_as_tampering() -> None:
     added = {"tests/test_regression.py": b"def test_new():\n    pass\n", "tests/helper.py": b""}
 
@@ -398,6 +411,13 @@ def test_a_reference_fix_that_touches_a_test_is_rejected(task_copy: Path) -> Non
     target.write_text("def test_weakened():\n    pass\n")
 
     with pytest.raises(TaskError, match="protected"):
+        load_task(task_copy)
+
+
+def test_an_oversized_task_file_is_rejected_before_it_is_read(task_copy: Path) -> None:
+    (task_copy / "task.toml").write_text("# padding\n" * 10_000)
+
+    with pytest.raises(TaskError, match="too large"):
         load_task(task_copy)
 
 

@@ -70,9 +70,14 @@ def collect_tree(root: Path) -> dict[str, bytes]:
     if root.is_symlink() or not root.is_dir():
         raise TreeError(f"{root} is not a real directory")
 
+    def unreadable(error: OSError) -> None:
+        # os.walk skips directories it cannot list unless told otherwise. A
+        # silently incomplete tree would be packaged and pinned as if whole.
+        raise TreeError(f"cannot read directory {error.filename}: {error.strerror}")
+
     files: dict[str, bytes] = {}
     total = 0
-    for current, dirnames, filenames in os.walk(root, followlinks=False):
+    for current, dirnames, filenames in os.walk(root, followlinks=False, onerror=unreadable):
         base = Path(current)
         dirnames[:] = sorted(name for name in dirnames if name not in IGNORED_NAMES)
         for name in dirnames:

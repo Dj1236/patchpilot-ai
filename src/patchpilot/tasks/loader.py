@@ -183,9 +183,9 @@ def load_task(task_dir: Path) -> LoadedTask:
     task_file = task_dir / TASK_FILE
     if task_file.is_symlink() or not task_file.is_file():
         raise TaskError(f"{task_file} is missing")
-    raw = task_file.read_bytes()
-    if len(raw) > _MAX_TASK_FILE_BYTES:
+    if task_file.stat().st_size > _MAX_TASK_FILE_BYTES:
         raise TaskError(f"{task_file} is too large")
+    raw = task_file.read_bytes()
     try:
         data = tomllib.loads(raw.decode("utf-8"))
     except (tomllib.TOMLDecodeError, UnicodeDecodeError) as exc:
