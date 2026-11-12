@@ -10,15 +10,16 @@ report for a human to accept or reject.
 
 ## Status
 
-Early development. The foundation, the restricted test sandbox and the
-evaluation task format are in place. No agent functionality exists yet.
+Early development. The foundation, the restricted test sandbox, the
+evaluation task format, and read-only issue intake with repository tools are
+in place. No agent functionality exists yet: nothing calls a model.
 
 | Milestone | State |
 |---|---|
 | 1. Specification | Done |
 | 2. Foundation | Built; CI gate not passed ([details](docs/ci-status.md)) |
 | 3. Sandbox and task format | Built and verified locally; not yet run on Linux CI |
-| 4. Intake and repository tools | Not started |
+| 4. Intake and repository tools | Built and verified locally; not yet run on Linux CI |
 | 5. Baseline end to end, plus evaluator | Not started |
 | 6. Stateful repair loop | Not started |
 | 7. Report and approval-gated draft PR | Not started |
@@ -30,6 +31,7 @@ evaluation task format are in place. No agent functionality exists yet.
 - [Threat model](docs/threat-model.md)
 - [Technology decisions](docs/decisions.md)
 - [Sandbox](docs/sandbox.md)
+- [Issue intake and repository tools](docs/intake.md)
 - [Evaluation tasks](docs/evaluation-tasks.md)
 - [Grading integrity](docs/grading-integrity.md)
 - [Third-party licenses](docs/third-party-licenses.md)
@@ -48,7 +50,9 @@ uv run patchpilot version
 ```
 
 Tests marked `sandbox` need a running Docker engine (on macOS: `colima
-start`). Without one they are skipped, not passed.
+start`). Without one they are skipped, not passed. The one test marked
+`network` makes real read-only requests to GitHub and runs only with
+`PATCHPILOT_LIVE_GITHUB=1`.
 
 Checks that must pass before a change is merged:
 

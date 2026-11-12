@@ -32,7 +32,11 @@ uv run pytest
 ```
 
 Since Milestone 3 this includes the sandbox tests, which run real containers
-through Colima.
+through Colima. Since Milestone 4 it includes fetch tests that run real git
+against local repositories.
+
+The same exception applies to Milestones 3 and 4: both are verified locally
+only, and neither has passed on hosted Linux CI.
 
 ## What local verification does not cover
 

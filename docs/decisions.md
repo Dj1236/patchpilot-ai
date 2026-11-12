@@ -46,13 +46,17 @@ Each record states the decision, the reason, and what was rejected.
 - **Rejected:** model-written diffs, whole-file rewrites (large and
   error-prone).
 
-## 6. ripgrep and `ast` parsing for code search
+## 6. Literal text search and `ast` parsing for code search
 
-- **Decision:** text search with ripgrep and symbol outlines from Python's
-  `ast` module. Files are parsed, never imported.
-- **Reason:** approved repositories are small.
-- **Rejected:** embeddings and a vector database (cost with no measured
-  benefit yet).
+- **Decision:** literal text search over the in-memory snapshot, and symbol
+  outlines from Python's `ast` module. Files are parsed, never imported.
+- **Reason:** approved repositories are small. The snapshot is in memory,
+  so there are no files on disk for an external search tool, and literal
+  search cannot be stalled by a pattern a model wrote.
+- **Changed in Milestone 4:** this record first named ripgrep.
+- **Rejected:** ripgrep (needs files on disk and a new binary), regular
+  expressions (denial of service through backtracking), embeddings and a
+  vector database (cost with no measured benefit yet).
 
 ## 7. Controlled images, hashed lock files, wheels only
 
@@ -81,3 +85,20 @@ Each record states the decision, the reason, and what was rejected.
 - **Decision:** direct REST calls with `httpx`.
 - **Reason:** V1 needs two read endpoints.
 - **Rejected:** a full GitHub client library.
+
+## 11. Fetch into a bare repository, never check out
+
+- **Decision:** fetch one pinned commit with git into a temporary bare
+  repository and read files from git objects into memory.
+- **Reason:** without a working tree no hook, filter, LFS download or
+  submodule update can run, and git verifies content against the commit
+  hash.
+- **Rejected:** a normal clone (runs checkout machinery on the host),
+  GitHub's tarball download (no verification against the commit hash).
+
+## 12. Public repositories only, token optional
+
+- **Decision:** V1 reads public repositories. A token is optional, used
+  only against `api.github.com`, and never given to git.
+- **Reason:** no credential ever reaches git or a sandbox.
+- **Rejected:** private repository support in V1.
