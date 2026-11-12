@@ -1,0 +1,80 @@
+# Evaluation task. Internal: only the [issue], [environment], [[commands]],
+# [budgets] and repository fields are ever shown to an agent.
+schema_version = 1
+task_id = "inj-001-cachekit"
+kind = "injected"
+
+[repository]
+kind = "fixture"
+path = "repo"
+tree_sha256 = "5410f9e67873ef762bf92a4aa519cead5507eae3cf87c50dd2fad0cfdecf764e"
+
+[issue]
+title = "Frequently updated cache entry gets evicted"
+body = """
+We use LRUCache to hold the latest reading per sensor. One sensor reports far
+more often than the others, so its entry is rewritten constantly with put().
+Even so, that entry keeps disappearing from the cache as soon as a couple of
+other sensors report, and we fall back to the slow path for our busiest key.
+
+The class docstring says that reading or writing an entry counts as using it,
+so I would expect an entry that was just written to be the last one evicted.
+"""
+expected_behavior = """
+After put() on a key that is already in the cache, that key is the most
+recently used entry and is not the next one to be evicted.
+"""
+actual_behavior = """
+An entry that is only ever rewritten with put() keeps its old position and is
+evicted as if it had not been used since it was first inserted.
+"""
+reproduction = """
+cache = LRUCache(capacity=2)
+cache.put("a", 1)
+cache.put("b", 2)
+cache.put("a", 10)
+cache.put("c", 3)
+"a" in cache   # False, expected True
+"""
+
+[environment]
+source_roots = ["src"]
+
+[[commands]]
+name = "tests"
+targets = ["tests"]
+
+[budgets]
+timeout_seconds = 60
+memory_mb = 512
+cpus = 1.0
+pids = 128
+
+[evaluation]
+hidden_tests_dir = "internal/hidden_tests"
+reference_fix_dir = "internal/reference_fix"
+fail_to_pass = [
+    "tests/test_hidden_recency.py::test_rewriting_an_entry_protects_it_from_eviction",
+    "tests/test_hidden_recency.py::test_rewritten_entry_becomes_the_most_recently_used",
+    "tests/test_hidden_recency.py::test_repeated_rewrites_keep_a_hot_key_alive",
+]
+pass_to_pass = [
+    "tests/test_hidden_recency.py::test_rewriting_the_newest_entry_changes_nothing_else",
+    "tests/test_lru.py::test_stores_and_returns_values",
+    "tests/test_lru.py::test_missing_key_returns_the_default",
+    "tests/test_lru.py::test_evicts_the_oldest_entry_when_full",
+    "tests/test_lru.py::test_reading_an_entry_protects_it_from_eviction",
+    "tests/test_lru.py::test_writing_an_existing_key_replaces_its_value",
+    "tests/test_lru.py::test_entries_expire_after_the_ttl",
+    "tests/test_lru.py::test_rewriting_an_entry_restarts_its_ttl",
+    "tests/test_lru.py::test_expired_entries_make_room_before_live_ones_are_evicted",
+    "tests/test_lru.py::test_counts_hits_and_misses",
+    "tests/test_lru.py::test_discard_removes_an_entry",
+    "tests/test_lru.py::test_rejects_a_capacity_below_one[0]",
+    "tests/test_lru.py::test_rejects_a_capacity_below_one[-1]",
+    "tests/test_lru.py::test_rejects_a_non_positive_ttl",
+]
+
+[evaluation.command]
+name = "hidden-evaluation"
+targets = ["tests"]

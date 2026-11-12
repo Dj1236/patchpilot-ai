@@ -38,6 +38,19 @@ it.
 | distlib | PSF-2.0 |
 | pathspec | MPL-2.0 |
 
+## Sandbox image
+
+The sandbox image is built locally and is not distributed with PatchPilot
+AI. It is based on the official `python:3.12-slim` image (Debian packages
+under their own licenses, CPython under PSF-2.0) and adds pytest, pluggy,
+iniconfig (MIT), packaging (Apache-2.0 OR BSD-2-Clause) and pygments
+(BSD-2-Clause), pinned in `src/patchpilot/sandbox/image/requirements.lock`.
+
+## Local tools
+
+Docker CLI (Apache-2.0) and Colima (MIT) are used on the developer machine
+only.
+
 All of these are compatible with distributing PatchPilot AI under the MIT
 License. `pathspec` is under the weak-copyleft MPL-2.0; it is used
 unmodified as a development tool only.

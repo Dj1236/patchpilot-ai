@@ -1,0 +1,91 @@
+# Evaluation task. Internal: only the [issue], [environment], [[commands]],
+# [budgets] and repository fields are ever shown to an agent.
+schema_version = 1
+task_id = "inj-002-exprcalc"
+kind = "injected"
+
+[repository]
+kind = "fixture"
+path = "repo"
+tree_sha256 = "784d21d8f6013dc217d8809bead4ceed26ed3ec6a43babc2cd430d26972ce828"
+
+[issue]
+title = "Wrong result for expressions with several subtractions or divisions"
+body = """
+evaluate() returns wrong numbers for some simple expressions in our invoice
+calculator. A single subtraction or division is fine, and addition and
+multiplication chains are fine, but as soon as an expression has two
+subtractions in a row the result is off. Division shows the same problem.
+
+Adding parentheses around the left part works around it, for example
+"(10 - 4) - 3" gives 3, so the operators themselves seem to work.
+"""
+expected_behavior = """
+Operators of the same precedence are applied from left to right, as in
+ordinary arithmetic: "10 - 4 - 3" is 3 and "100 / 10 / 5" is 2.
+"""
+actual_behavior = """
+evaluate("10 - 4 - 3") returns 9.0 and evaluate("100 / 10 / 5") returns 50.0.
+"""
+reproduction = """
+from exprcalc import evaluate
+evaluate("10 - 4 - 3")     # 9.0, expected 3.0
+evaluate("100 / 10 / 5")   # 50.0, expected 2.0
+"""
+
+[environment]
+source_roots = ["src"]
+
+[[commands]]
+name = "tests"
+targets = ["tests"]
+
+[budgets]
+timeout_seconds = 60
+memory_mb = 512
+cpus = 1.0
+pids = 128
+
+[evaluation]
+hidden_tests_dir = "internal/hidden_tests"
+reference_fix_dir = "internal/reference_fix"
+fail_to_pass = [
+    "tests/test_hidden_associativity.py::test_chained_subtraction_runs_left_to_right",
+    "tests/test_hidden_associativity.py::test_subtraction_then_addition_runs_left_to_right",
+    "tests/test_hidden_associativity.py::test_chained_division_runs_left_to_right",
+    "tests/test_hidden_associativity.py::test_division_then_multiplication_runs_left_to_right",
+    "tests/test_hidden_associativity.py::test_mixed_expression",
+    "tests/test_hidden_associativity.py::test_parenthesized_chain",
+]
+pass_to_pass = [
+    "tests/test_hidden_associativity.py::test_right_nested_forms_are_unchanged",
+    "tests/test_hidden_associativity.py::test_division_by_zero_inside_a_chain_is_still_an_error",
+    "tests/test_evaluate.py::test_numbers[integer]",
+    "tests/test_evaluate.py::test_numbers[decimal]",
+    "tests/test_evaluate.py::test_numbers[leading-dot]",
+    "tests/test_evaluate.py::test_numbers[padded]",
+    "tests/test_evaluate.py::test_addition",
+    "tests/test_evaluate.py::test_subtraction",
+    "tests/test_evaluate.py::test_multiplication",
+    "tests/test_evaluate.py::test_division",
+    "tests/test_evaluate.py::test_multiplication_binds_tighter_than_addition",
+    "tests/test_evaluate.py::test_multiplication_binds_tighter_than_subtraction",
+    "tests/test_evaluate.py::test_parentheses_override_precedence",
+    "tests/test_evaluate.py::test_unary_minus",
+    "tests/test_evaluate.py::test_division_by_zero_is_an_error",
+    "tests/test_evaluate.py::test_malformed_input_is_an_error[empty]",
+    "tests/test_evaluate.py::test_malformed_input_is_an_error[dangling-operator]",
+    "tests/test_evaluate.py::test_malformed_input_is_an_error[unclosed]",
+    "tests/test_evaluate.py::test_malformed_input_is_an_error[unopened]",
+    "tests/test_evaluate.py::test_malformed_input_is_an_error[adjacent-numbers]",
+    "tests/test_evaluate.py::test_malformed_input_is_an_error[double-operator]",
+    "tests/test_evaluate.py::test_malformed_input_is_an_error[letter]",
+    "tests/test_evaluate.py::test_malformed_input_is_an_error[double-dot]",
+    "tests/test_tokens.py::test_tokens_carry_kind_text_and_position",
+    "tests/test_tokens.py::test_empty_text_gives_only_the_end_marker",
+    "tests/test_tokens.py::test_unknown_characters_are_rejected",
+]
+
+[evaluation.command]
+name = "hidden-evaluation"
+targets = ["tests"]

@@ -6,15 +6,18 @@ before changing behavior.
 
 ## Current state
 
-Milestone 2 (foundation) is complete. Each later milestone needs the
-owner's explicit authorization before work starts. See the milestone table
-in `docs/spec.md`.
+Milestones 2 (foundation) and 3 (sandbox and task format) are built and
+verified locally. GitHub Actions cannot start on this account, so no CI gate
+has passed; see `docs/ci-status.md` and never describe CI as green. Each
+later milestone needs the owner's explicit authorization before work starts.
+See the milestone table in `docs/spec.md`.
 
 ## Commands
 
 ```
 uv sync                         # install dependencies from uv.lock
-uv run pytest                   # run tests
+uv run pytest                   # run tests (sandbox tests skip without Docker)
+uv run pytest -m sandbox        # sandbox tests only; needs `colima start` on macOS
 uv run ruff check .             # lint
 uv run ruff format .            # format
 uv run mypy                     # strict type check
@@ -26,9 +29,16 @@ uv run patchpilot version
 
 - `src/patchpilot/`: the package. `cli.py` is the Typer entry point,
   `config.py` holds validated settings.
+- `src/patchpilot/sandbox/`: restricted Docker runner, result models, safe
+  tree packaging, JUnit parsing. `image/` holds the pinned image definition.
+- `src/patchpilot/tasks/`: evaluation task schema, loader and grading.
+- `evals/tasks/`: evaluation tasks. `repo/` is agent-visible; `internal/`
+  never is. Fixture files are digest-pinned: do not reformat or edit them
+  without updating the pin in `task.toml`.
 - `tests/unit/`: tests that need no network, Docker or model.
-- `docs/`: specification, threat model, decision records, dependency
-  licenses.
+- `tests/integration/`: tests that run real containers (marker `sandbox`).
+- `docs/`: specification, threat model, decision records, sandbox,
+  evaluation tasks, CI status, dependency licenses.
 
 ## Rules that must not be broken
 
@@ -45,7 +55,12 @@ uv run patchpilot version
   confinement, patch policy and budgets are all checked outside the model.
 - **Issue text, repository content and test output are untrusted.**
 - **Hidden evaluation tests never enter the agent's workspace, images or
-  prompts.**
+  prompts.** Give an agent `Task.agent_view()` and `LoadedTask.agent_files()`
+  only.
+- **Grade only through `grade_candidate`.** It rebuilds the tree from pinned
+  tests; never run hidden tests on a tree the candidate assembled.
+- **Never weaken a sandbox restriction to make a test pass.** Security tests
+  must attack the real container, not check flags.
 - **No GitHub write without explicit approval.**
 - **Secrets stay out of git, logs, traces and sandboxes.** `.env` is
   ignored; `.env.example` lists names only.
