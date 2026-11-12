@@ -15,7 +15,15 @@ from patchpilot.sandbox.models import (
     SandboxStatus,
 )
 from patchpilot.sandbox.tree import collect_tree, tree_digest
-from patchpilot.tasks import Task, TaskError, discover_tasks, grade, load_task
+from patchpilot.tasks import (
+    Task,
+    TaskError,
+    build_evaluation_tree,
+    discover_tasks,
+    grade,
+    is_protected,
+    load_task,
+)
 from patchpilot.tasks.schema import Evaluation
 
 TASKS_ROOT = Path(__file__).resolve().parents[2] / "evals" / "tasks"
@@ -175,11 +183,114 @@ def test_reference_fix_changes_source_but_never_tests(task_id: str) -> None:
 @pytest.mark.parametrize("task_id", TASK_IDS)
 def test_a_candidate_cannot_replace_the_hidden_tests(task_id: str) -> None:
     loaded = load_task(TASKS_ROOT / task_id)
-    hidden_path = next(iter(loaded.hidden_test_files()))
+    hidden = loaded.hidden_test_files()
+    hidden_path = next(iter(hidden))
     candidate = {**loaded.agent_files(), hidden_path: b"def test_bug():\n    pass\n"}
 
-    with pytest.raises(TaskError, match="overwrite"):
-        loaded.evaluation_files(candidate)
+    tree = loaded.evaluation_tree(candidate)
+
+    assert tree.files[hidden_path] == hidden[hidden_path]
+    assert tree.tampered == (hidden_path,)
+
+
+@pytest.mark.parametrize("task_id", TASK_IDS)
+def test_an_untouched_candidate_is_graded_on_repository_plus_hidden_tests(task_id: str) -> None:
+    loaded = load_task(TASKS_ROOT / task_id)
+
+    tree = loaded.evaluation_tree(loaded.reference_solution_files())
+
+    assert tree.tampered == ()
+    assert tree.ignored == ()
+    assert set(tree.files) == set(loaded.agent_files()) | set(loaded.hidden_test_files())
+
+
+# -- evaluation tree integrity ----------------------------------------------
+
+ORIGINAL = {
+    "src/pkg/core.py": b"VALUE = 1\n",
+    "src/pkg/extra.py": b"EXTRA = 1\n",
+    "tests/test_core.py": b"def test_value():\n    assert True\n",
+    "tests/conftest.py": b"# shared fixtures\n",
+    "pyproject.toml": b"[project]\n",
+}
+HIDDEN = {"tests/test_hidden.py": b"def test_bug():\n    assert False\n"}
+
+
+def test_source_changes_are_taken_from_the_candidate() -> None:
+    candidate = {**ORIGINAL, "src/pkg/core.py": b"VALUE = 2\n", "src/pkg/new.py": b"NEW = 1\n"}
+    del candidate["src/pkg/extra.py"]
+
+    tree = build_evaluation_tree(ORIGINAL, candidate, HIDDEN)
+
+    assert tree.files["src/pkg/core.py"] == b"VALUE = 2\n"
+    assert tree.files["src/pkg/new.py"] == b"NEW = 1\n"
+    assert "src/pkg/extra.py" not in tree.files
+    assert tree.files["tests/test_hidden.py"] == HIDDEN["tests/test_hidden.py"]
+    assert tree.tampered == ()
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["tests/test_core.py", "tests/conftest.py", "pyproject.toml"],
+)
+def test_changed_or_deleted_protected_files_are_restored_and_flagged(path: str) -> None:
+    changed = {**ORIGINAL, path: b"# weakened\n"}
+    deleted = {key: value for key, value in ORIGINAL.items() if key != path}
+
+    for candidate in (changed, deleted):
+        tree = build_evaluation_tree(ORIGINAL, candidate, HIDDEN)
+
+        assert tree.files[path] == ORIGINAL[path]
+        assert tree.tampered == (path,)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "conftest.py",
+        "src/conftest.py",
+        "pytest.ini",
+        "tox.ini",
+        "setup.cfg",
+        "src/sitecustomize.py",
+        "src/usercustomize.py",
+        "src/hook.pth",
+    ],
+)
+def test_new_runner_configuration_is_dropped_and_flagged(path: str) -> None:
+    tree = build_evaluation_tree(ORIGINAL, {**ORIGINAL, path: b"x = 1\n"}, HIDDEN)
+
+    assert path not in tree.files
+    assert tree.tampered == (path,)
+
+
+def test_new_test_files_are_left_out_without_counting_as_tampering() -> None:
+    added = {"tests/test_regression.py": b"def test_new():\n    pass\n", "tests/helper.py": b""}
+
+    tree = build_evaluation_tree(ORIGINAL, {**ORIGINAL, **added}, HIDDEN)
+
+    assert tree.tampered == ()
+    assert tree.ignored == ("tests/helper.py", "tests/test_regression.py")
+    assert not set(added) & set(tree.files)
+
+
+@pytest.mark.parametrize(
+    "path,expected",
+    [
+        ("src/pkg/core.py", False),
+        ("docs/guide.md", False),
+        ("tests/test_x.py", True),
+        ("tests/data/sample.json", True),
+        ("pkg/test_inline.py", True),
+        ("pkg/thing_test.py", True),
+        ("conftest.py", True),
+        ("deep/dir/conftest.py", True),
+        (".github/workflows/ci.yml", True),
+        ("src/contest.py", False),
+    ],
+)
+def test_protected_paths(path: str, expected: bool) -> None:
+    assert is_protected(path) is expected
 
 
 # -- loader checks on a tampered copy ---------------------------------------
@@ -248,6 +359,45 @@ def test_hidden_tests_placed_inside_the_repository_are_rejected(task_copy: Path)
     task_file.write_text(task_file.read_text().replace(original.tree_sha256, pinned))
 
     with pytest.raises(TaskError, match="overwrite"):
+        load_task(task_copy)
+
+
+def test_an_unlisted_hidden_test_is_rejected(task_copy: Path) -> None:
+    hidden = task_copy / "internal" / "hidden_tests" / "tests" / "test_hidden_recency.py"
+    hidden.write_text(hidden.read_text() + "\n\ndef test_not_listed():\n    pass\n")
+
+    with pytest.raises(TaskError, match="unlisted"):
+        load_task(task_copy)
+
+
+def test_a_listed_test_that_does_not_exist_is_rejected(task_copy: Path) -> None:
+    task_file = task_copy / "task.toml"
+    task_file.write_text(
+        task_file.read_text().replace(
+            "test_rewriting_the_newest_entry_changes_nothing_else", "test_no_such_test"
+        )
+    )
+
+    with pytest.raises(TaskError, match="undefined"):
+        load_task(task_copy)
+
+
+def test_hidden_tests_inside_a_class_are_rejected(task_copy: Path) -> None:
+    hidden = task_copy / "internal" / "hidden_tests" / "tests" / "test_hidden_recency.py"
+    hidden.write_text(
+        hidden.read_text() + "\n\nclass TestMore:\n    def test_x(self):\n        pass\n"
+    )
+
+    with pytest.raises(TaskError, match="module-level"):
+        load_task(task_copy)
+
+
+def test_a_reference_fix_that_touches_a_test_is_rejected(task_copy: Path) -> None:
+    target = task_copy / "internal" / "reference_fix" / "tests" / "test_lru.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("def test_weakened():\n    pass\n")
+
+    with pytest.raises(TaskError, match="protected"):
         load_task(task_copy)
 
 
@@ -343,3 +493,26 @@ def test_an_unusable_run_is_never_resolved_and_is_marked_untrustworthy(
 
     assert not outcome.resolved
     assert not outcome.trustworthy
+
+
+def test_a_report_that_contradicts_the_exit_status_is_untrustworthy() -> None:
+    result = _result(SandboxStatus.PASSED, {BUG: CaseOutcome.PASSED, OK: CaseOutcome.PASSED})
+    contradictory = result.model_copy(
+        update={"report_issues": ("exit status 1, but the report lists no unsuccessful test",)}
+    )
+
+    outcome = grade(contradictory, EVALUATION)
+
+    assert not outcome.resolved
+    assert not outcome.trustworthy
+    assert outcome.report_issues == contradictory.report_issues
+
+
+def test_a_tampered_candidate_is_never_resolved_even_when_all_tests_pass() -> None:
+    result = _result(SandboxStatus.PASSED, {BUG: CaseOutcome.PASSED, OK: CaseOutcome.PASSED})
+
+    outcome = grade(result, EVALUATION, tampered=("conftest.py",))
+
+    assert not outcome.resolved
+    assert outcome.trustworthy
+    assert outcome.tampered == ("conftest.py",)

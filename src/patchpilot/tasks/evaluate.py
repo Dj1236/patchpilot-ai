@@ -20,6 +20,9 @@ class Grade(FrozenModel):
     still_failing: tuple[str, ...]
     regressions: tuple[str, ...]
     missing: tuple[str, ...]
+    report_issues: tuple[str, ...] = ()
+    tampered: tuple[str, ...] = ()
+    ignored: tuple[str, ...] = ()
     status: SandboxStatus
 
 
@@ -40,17 +43,26 @@ class FixtureReport(FrozenModel):
         return all(check.ok for check in self.checks)
 
 
-def grade(result: SandboxResult, evaluation: Evaluation) -> Grade:
+def grade(
+    result: SandboxResult,
+    evaluation: Evaluation,
+    *,
+    tampered: tuple[str, ...] = (),
+    ignored: tuple[str, ...] = (),
+) -> Grade:
     """Grade a hidden-test run.
 
-    ``trustworthy`` is False when the run did not produce a usable report
-    (timeout, memory limit, infrastructure error, missing results). Such a run
-    is never ``resolved``, and it is not evidence that the patch is wrong.
+    ``trustworthy`` is False when the run did not produce a usable report:
+    a timeout, a memory limit, an infrastructure error, a report that
+    contradicts pytest's exit status, or an expected test that is missing.
+    Such a run is never ``resolved``, and it is not evidence that the patch
+    is wrong. A candidate that tampered with tests or runner configuration is
+    never ``resolved`` either, whatever its tests report.
     """
     outcomes = result.outcomes()
     expected = (*evaluation.fail_to_pass, *evaluation.pass_to_pass)
     missing = tuple(node_id for node_id in expected if node_id not in outcomes)
-    ran = result.status in (SandboxStatus.PASSED, SandboxStatus.FAILED)
+    ran = result.report_is_consistent
     still_failing = tuple(
         node_id
         for node_id in evaluation.fail_to_pass
@@ -63,11 +75,14 @@ def grade(result: SandboxResult, evaluation: Evaluation) -> Grade:
     )
     trustworthy = ran and not missing
     return Grade(
-        resolved=trustworthy and not still_failing and not regressions,
+        resolved=trustworthy and not still_failing and not regressions and not tampered,
         trustworthy=trustworthy,
         still_failing=still_failing,
         regressions=regressions,
         missing=missing,
+        report_issues=result.report_issues,
+        tampered=tampered,
+        ignored=ignored,
         status=result.status,
     )
 
@@ -77,13 +92,14 @@ def grade_candidate(
 ) -> tuple[Grade, SandboxResult]:
     """Run the hidden tests against ``candidate`` in a fresh sandbox and grade it."""
     task = loaded.task
+    tree = loaded.evaluation_tree(candidate)
     result = sandbox.run(
-        loaded.evaluation_files(candidate),
+        tree.files,
         task.evaluation.command,
         task.budgets,
         source_roots=task.environment.source_roots,
     )
-    return grade(result, task.evaluation), result
+    return grade(result, task.evaluation, tampered=tree.tampered, ignored=tree.ignored), result
 
 
 def verify_fixture(loaded: LoadedTask, sandbox: DockerSandbox) -> FixtureReport:

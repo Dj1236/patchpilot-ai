@@ -68,10 +68,13 @@ def test_a_patch_that_deletes_a_visible_test_is_not_resolved(
     removed = next(path for path in candidate if path.startswith("tests/test_"))
     del candidate[removed]
 
-    outcome, _ = grade_candidate(loaded, candidate, sandbox)
+    outcome, result = grade_candidate(loaded, candidate, sandbox)
 
+    assert outcome.tampered == (removed,)
     assert not outcome.resolved
-    assert any(node_id.startswith(removed) for node_id in outcome.missing)
+    # The deleted file was restored from the pinned state, so its tests still ran.
+    assert outcome.missing == ()
+    assert any(node_id.startswith(removed) for node_id in result.outcomes())
 
 
 @pytest.mark.parametrize("task_id", TASK_IDS)

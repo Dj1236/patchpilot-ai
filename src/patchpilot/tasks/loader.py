@@ -14,6 +14,7 @@ reference fix are reachable only through ``evaluation_files``, which is for
 the evaluator.
 """
 
+import ast
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -22,6 +23,12 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from patchpilot.sandbox.tree import TreeError, collect_tree, overlay, tree_digest
+from patchpilot.tasks.integrity import (
+    EvaluationTree,
+    build_evaluation_tree,
+    is_protected,
+    is_test_path,
+)
 from patchpilot.tasks.schema import INTERNAL_DIR, FixtureRepository, Task
 
 TASK_FILE = "task.toml"
@@ -57,16 +64,14 @@ class LoadedTask:
     def reference_fix_files(self) -> dict[str, bytes]:
         return _collect(self.root / self.task.evaluation.reference_fix_dir, self.task.task_id)
 
-    def evaluation_files(self, candidate: Mapping[str, bytes]) -> dict[str, bytes]:
-        """Return ``candidate`` with the hidden tests added, for the evaluator only.
+    def evaluation_tree(self, candidate: Mapping[str, bytes]) -> EvaluationTree:
+        """Return the tree to grade ``candidate`` on, for the evaluator only.
 
-        Hidden tests are always new files. A candidate that already has a file
-        at one of their paths is rejected, so a patch can never replace them.
+        Source files come from the candidate. Tests and runner configuration
+        always come from the pinned starting state, and the hidden tests are
+        added last, so nothing in the candidate can replace or reconfigure them.
         """
-        try:
-            return overlay(candidate, self.hidden_test_files(), allow_overwrite=False)
-        except TreeError as exc:
-            raise TaskError(f"task {self.task.task_id}: {exc}") from exc
+        return build_evaluation_tree(self.agent_files(), candidate, self.hidden_test_files())
 
     def reference_solution_files(self) -> dict[str, bytes]:
         """Return the repository with the reference fix applied, for the evaluator only."""
@@ -113,6 +118,15 @@ def _check_files(loaded: LoadedTask) -> None:
         raise TaskError(f"task {task.task_id}: the reference fix changes nothing")
     if set(fix) & set(hidden):
         raise TaskError(f"task {task.task_id}: the reference fix overlaps the hidden tests")
+    protected = sorted(path for path in fix if is_protected(path))
+    if protected:
+        raise TaskError(
+            f"task {task.task_id}: the reference fix changes protected files {protected}"
+        )
+    misplaced = sorted(path for path in hidden if not is_test_path(path))
+    if misplaced:
+        raise TaskError(f"task {task.task_id}: hidden files are not test files: {misplaced}")
+    _check_hidden_test_identities(loaded, hidden)
 
     hidden_modules = {path for path in hidden if path.endswith(".py")}
     for node_id in task.evaluation.fail_to_pass:
@@ -124,6 +138,44 @@ def _check_files(loaded: LoadedTask) -> None:
     for node_id in task.evaluation.pass_to_pass:
         if node_id.split("::", 1)[0] not in known:
             raise TaskError(f"task {task.task_id}: pass-to-pass test {node_id} does not exist")
+
+
+def _check_hidden_test_identities(loaded: LoadedTask, hidden: Mapping[str, bytes]) -> None:
+    """Require every test function in the hidden tests to be listed in the task.
+
+    The files are parsed, never imported. An unlisted hidden test would run
+    without counting, and a listed test that does not exist could never pass.
+    """
+    task = loaded.task
+    defined: set[str] = set()
+    for path, content in hidden.items():
+        if not path.endswith(".py"):
+            continue
+        try:
+            module = ast.parse(content)
+        except (SyntaxError, ValueError) as exc:
+            raise TaskError(f"task {task.task_id}: hidden test {path} does not parse") from exc
+        for node in module.body:
+            if isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+                raise TaskError(
+                    f"task {task.task_id}: hidden tests must be module-level functions, "
+                    f"found class {node.name} in {path}"
+                )
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith(
+                "test_"
+            ):
+                defined.add(f"{path}::{node.name}")
+
+    listed = {
+        node_id.split("[", 1)[0]
+        for node_id in (*task.evaluation.fail_to_pass, *task.evaluation.pass_to_pass)
+        if node_id.split("::", 1)[0] in hidden
+    }
+    if defined != listed:
+        raise TaskError(
+            f"task {task.task_id}: hidden tests and the task definition disagree "
+            f"(unlisted: {sorted(defined - listed)}, undefined: {sorted(listed - defined)})"
+        )
 
 
 def load_task(task_dir: Path) -> LoadedTask:
