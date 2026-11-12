@@ -1,0 +1,38 @@
+# Local checks run before every commit. Ruff and mypy run through uv so they
+# use the exact versions pinned in uv.lock.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 2ca41cc1372d1e939a6a879f18cdc19fc1cac1ce  # frozen: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
+        pass_filenames: false
