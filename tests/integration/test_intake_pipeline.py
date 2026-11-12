@@ -257,37 +257,154 @@ def test_the_command_refuses_a_bad_url_and_a_missing_allowlist_file(tmp_path: Pa
     assert missing.exit_code == 2 and "not a regular file" in missing.output
 
 
-# -- live smoke test (opt-in) -------------------------------------------------------
+# -- live smoke tests (opt-in) -----------------------------------------------------
 
-
-@pytest.mark.network
-@pytest.mark.skipif(
+LIVE = pytest.mark.skipif(
     os.environ.get("PATCHPILOT_LIVE_GITHUB") != "1",
     reason="live GitHub requests run only when PATCHPILOT_LIVE_GITHUB=1",
 )
-def test_live_read_only_intake_of_a_public_issue(tmp_path: Path) -> None:
+LIVE_OWNER, LIVE_NAME, LIVE_ID = "octocat", "Hello-World", 1296269
+LIVE_COMMIT = "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"
+# Issue 7 is a real issue. Number 1 in this repository is a pull request.
+LIVE_ISSUE = "https://github.com/octocat/Hello-World/issues/7"
+LIVE_PULL_REQUEST = "https://github.com/octocat/Hello-World/issues/1"
+READ_ONLY_GIT_COMMANDS = {"init", "fetch", "cat-file", "ls-tree", "rev-parse"}
+
+
+class RecordingTransport(httpx.HTTPTransport):
+    """A real HTTPS transport that notes what was sent."""
+
+    def __init__(self) -> None:
+        super().__init__(trust_env=False)
+        self.sent: list[tuple[str, str, str, bool]] = []
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.sent.append(
+            (
+                request.method,
+                request.url.host,
+                request.url.path,
+                "authorization" in request.headers,
+            )
+        )
+        return super().handle_request(request)
+
+
+def _live_intake(pinned: bool) -> tuple[Any, RecordingTransport, list[list[str]]]:
+    from patchpilot.repo.snapshot import fetch_snapshot
+    from patchpilot.sandbox.process import run_bounded
+
+    git_calls: list[list[str]] = []
+
+    def recording(argv: list[str], **kwargs: Any) -> Any:
+        git_calls.append(list(argv))
+        return run_bounded(argv, **kwargs)
+
+    fetcher = GitFetcher(process_runner=recording)
+    entry = ApprovedRepository(
+        owner=LIVE_OWNER,
+        name=LIVE_NAME,
+        repository_id=LIVE_ID,
+        commit_sha=LIVE_COMMIT if pinned else None,
+    )
+    transport = RecordingTransport()
+    client = GitHubClient(transport=transport)
+    try:
+        result = run_intake(
+            LIVE_ISSUE,
+            Allowlist(repositories=(entry,)),
+            client,
+            snapshotter=lambda repository, sha, branch: fetch_snapshot(
+                repository, sha, fetcher=fetcher, fallback_branch=branch
+            ),
+        )
+    finally:
+        client.close()
+    return result, transport, git_calls
+
+
+@pytest.mark.network
+@LIVE
+def test_live_intake_of_a_genuine_public_issue_is_complete_and_read_only() -> None:
     """Unauthenticated, read-only requests to one allowlisted public repository."""
+    from patchpilot.repo.tools import ListFilesResult, ReadFileResult, RepositoryTools
+
+    result, transport, git_calls = _live_intake(pinned=True)
+
+    # The issue was fetched and classified as an issue of the approved repository.
+    report = result.bug_report
+    assert report.issue.canonical_url == "https://github.com/octocat/hello-world/issues/7"
+    assert report.repository_id == LIVE_ID
+    assert report.state in ("open", "closed")
+    assert len(report.title.original) > 0
+    assert report.title.captured_is_complete
+    assert len(report.body.complete_sha256) == 64
+
+    # The allowlisted commit was pinned and is the commit that was snapshotted.
+    assert result.pinned_by == "allowlist"
+    assert result.commit_sha == result.snapshot.commit_sha == LIVE_COMMIT
+    assert result.snapshot.url == "https://github.com/octocat/hello-world"
+    assert len(result.snapshot.tree_sha256) == 64
+    assert len(result.snapshot.files) >= 1
+
+    # Listing and reading work on the snapshot.
+    tools = RepositoryTools(result.snapshot.files)
+    listing = tools.call("list_files", {})
+    assert isinstance(listing, ListFilesResult)
+    paths = [entry.path for entry in listing.entries]
+    assert paths == sorted(result.snapshot.files)
+    read = tools.call("read_file", {"path": paths[0]})
+    assert isinstance(read, ReadFileResult)
+    assert read.content.reveal().strip() != ""
+    assert read.content.reveal().encode() in result.snapshot.files[paths[0]]
+
+    # Nothing but unauthenticated reads left the machine.
+    assert transport.sent, "no request was recorded"
+    assert all(method == "GET" for method, _, _, _ in transport.sent)
+    assert all(host == "api.github.com" for _, host, _, _ in transport.sent)
+    assert not any(authenticated for _, _, _, authenticated in transport.sent)
+    assert [path for _, _, path, _ in transport.sent] == [
+        "/repos/octocat/hello-world",
+        "/repos/octocat/hello-world/issues/7",
+    ]
+    commands = {argv[argv.index("--git-dir") + 2] for argv in git_calls}
+    assert commands <= READ_ONLY_GIT_COMMANDS
+    remotes = {part for argv in git_calls for part in argv if part.startswith("https://")}
+    assert remotes == {"https://github.com/octocat/hello-world.git"}
+    assert not any("push" in argv or "send-pack" in argv for argv in git_calls)
+
+
+@pytest.mark.network
+@LIVE
+def test_live_default_branch_is_resolved_to_a_full_commit_and_fetched() -> None:
+    result, transport, _ = _live_intake(pinned=False)
+
+    assert result.pinned_by == "default_branch"
+    assert len(result.commit_sha) == 40 and result.commit_sha == result.snapshot.commit_sha
+    assert all(method == "GET" for method, _, _, _ in transport.sent)
+    assert transport.sent[-1][2].startswith("/repos/octocat/hello-world/git/ref/heads/")
+
+
+@pytest.mark.network
+@LIVE
+def test_live_command_accepts_an_issue_and_refuses_a_pull_request(tmp_path: Path) -> None:
     allowlist = tmp_path / "approved.toml"
     allowlist.write_text(
-        'schema_version = 1\n\n[[repositories]]\nowner = "octocat"\nname = "Hello-World"\n'
-        "repository_id = 1296269\n"
-        'commit_sha = "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"\n'
+        "schema_version = 1\n\n[[repositories]]\n"
+        f'owner = "{LIVE_OWNER}"\nname = "{LIVE_NAME}"\nrepository_id = {LIVE_ID}\n'
+        f'commit_sha = "{LIVE_COMMIT}"\n'
     )
-    # Issue 7 is a real issue. Number 1 in this repository is a pull request,
-    # which the second half of this test expects to be refused.
-    issue = "https://github.com/octocat/Hello-World/issues/7"
-    pull_request = "https://github.com/octocat/Hello-World/issues/1"
+    environment = {"PATCHPILOT_GITHUB_TOKEN": ""}
 
-    result = runner.invoke(
-        app,
-        ["intake", issue, "--allowlist", str(allowlist), "--json"],
-        env={"PATCHPILOT_GITHUB_TOKEN": ""},
+    accepted = runner.invoke(
+        app, ["intake", LIVE_ISSUE, "--allowlist", str(allowlist), "--json"], env=environment
+    )
+    refused = runner.invoke(
+        app, ["intake", LIVE_PULL_REQUEST, "--allowlist", str(allowlist)], env=environment
     )
 
-    assert result.exit_code == 0, result.output
-    assert '"commit": "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"' in result.output
-    assert '"pinned_by": "allowlist"' in result.output
-
-    refused = runner.invoke(app, ["intake", pull_request, "--allowlist", str(allowlist)])
+    assert accepted.exit_code == 0, accepted.output
+    assert f'"commit": "{LIVE_COMMIT}"' in accepted.output
+    assert '"pinned_by": "allowlist"' in accepted.output
     assert refused.exit_code == 1
     assert "not_an_issue" in refused.output
