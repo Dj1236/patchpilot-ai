@@ -64,6 +64,7 @@ addopts = "--strict-markers --strict-config -ra"
 xfail_strict = true
 markers = [
     "sandbox: needs a running Docker engine; skipped when none is reachable",
+    "network: makes real read-only requests to GitHub; runs only when PATCHPILOT_LIVE_GITHUB=1",
 ]
 
 [tool.coverage.run]
