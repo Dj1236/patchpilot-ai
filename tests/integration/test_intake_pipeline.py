@@ -273,9 +273,10 @@ def test_live_read_only_intake_of_a_public_issue(tmp_path: Path) -> None:
         "repository_id = 1296269\n"
         'commit_sha = "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"\n'
     )
-    issue = os.environ.get(
-        "PATCHPILOT_LIVE_ISSUE", "https://github.com/octocat/Hello-World/issues/1"
-    )
+    # Issue 7 is a real issue. Number 1 in this repository is a pull request,
+    # which the second half of this test expects to be refused.
+    issue = "https://github.com/octocat/Hello-World/issues/7"
+    pull_request = "https://github.com/octocat/Hello-World/issues/1"
 
     result = runner.invoke(
         app,
@@ -286,3 +287,7 @@ def test_live_read_only_intake_of_a_public_issue(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert '"commit": "7fd1a60b01f91b314f59955a4e4d4e80d8edf11d"' in result.output
     assert '"pinned_by": "allowlist"' in result.output
+
+    refused = runner.invoke(app, ["intake", pull_request, "--allowlist", str(allowlist)])
+    assert refused.exit_code == 1
+    assert "not_an_issue" in refused.output

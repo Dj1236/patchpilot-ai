@@ -7,7 +7,7 @@ written to logs, and is never passed to git or to a sandbox.
 
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,3 +31,8 @@ class Settings(BaseSettings):
         default=None,
         description="Optional read-only token, sent to api.github.com only. Never to git.",
     )
+
+    @field_validator("github_token", "allowlist_path", mode="before")
+    @classmethod
+    def _empty_means_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value

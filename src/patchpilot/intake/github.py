@@ -110,7 +110,8 @@ class GitHubClient:
         timeout_seconds: float = 10.0,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
-        self._token = token
+        # An empty token means no token: an empty credential must never be sent.
+        self._token = token if token is not None and token.get_secret_value().strip() else None
         self._sleep = sleep
         self.request_count = 0
         self._client = httpx.Client(

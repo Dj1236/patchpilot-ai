@@ -375,6 +375,16 @@ def test_the_token_never_appears_in_errors_logs_or_results(
     assert CANARY not in caplog.text
 
 
+@pytest.mark.parametrize("empty", ["", "   "])
+def test_an_empty_token_is_treated_as_no_token(empty: str) -> None:
+    recorder = Recorder(_json(ISSUE_JSON))
+    client = GitHubClient(token=SecretStr(empty), transport=httpx.MockTransport(recorder))
+
+    client.get_issue(REPOSITORY, 7)
+
+    assert "authorization" not in recorder.requests[0].headers
+
+
 def test_a_rejected_token_is_reported_as_such() -> None:
     client, _ = _client(_json({"message": "Bad credentials"}, status=401), token=CANARY)
 
