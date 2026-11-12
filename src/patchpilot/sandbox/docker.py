@@ -28,10 +28,8 @@ from pathlib import Path
 from typing import Protocol
 
 from patchpilot import __version__
-from patchpilot.sandbox.junit import MAX_JUNIT_BYTES, JUnitError, parse_junit
+from patchpilot.sandbox.junit import MAX_JUNIT_BYTES, JUnitError, JUnitReport, parse_junit
 from patchpilot.sandbox.models import (
-    CaseResult,
-    Counts,
     PytestCommand,
     RunMetadata,
     SandboxLimits,
@@ -48,6 +46,9 @@ TMP_DIR = "/tmp"  # noqa: S108 - a path inside the container, not on the host
 JUNIT_PATH = f"{TMP_DIR}/.patchpilot/junit.xml"
 CONTAINER_LABEL = "patchpilot.sandbox"
 IMAGE_REPOSITORY = "patchpilot-sandbox"
+IMAGE_FILES = ("Dockerfile", "requirements.lock", "run_tests.py", "pytest.ini")
+LAUNCHER_PATH = "/opt/patchpilot/run_tests.py"
+PYTEST_CONFIG_PATH = "/opt/patchpilot/pytest.ini"
 
 # The only host variables the docker client itself is allowed to see.
 _DOCKER_CLIENT_ENV = (
@@ -119,7 +120,7 @@ def docker_client_env(environ: Mapping[str, str]) -> dict[str, str]:
 def image_definition() -> dict[str, bytes]:
     """Return the files that define the sandbox image."""
     package = resources.files("patchpilot.sandbox") / "image"
-    return {name: (package / name).read_bytes() for name in ("Dockerfile", "requirements.lock")}
+    return {name: (package / name).read_bytes() for name in IMAGE_FILES}
 
 
 def image_ref() -> str:
@@ -143,6 +144,8 @@ def build_run_argv(name: str, image: str, limits: SandboxLimits) -> list[str]:
     return [
         "run",
         "--detach",
+        # Removed by the engine as soon as it exits, even if the host process died.
+        "--rm",
         "--name",
         name,
         "--label",
@@ -197,16 +200,25 @@ def build_load_argv(name: str) -> list[str]:
     return ["exec", "--interactive", "--user", SANDBOX_USER, name, *extract]
 
 
-def build_pytest_argv(command: PytestCommand) -> list[str]:
-    """Return the fixed pytest command line run inside the container."""
+def build_pytest_argv(command: PytestCommand, source_roots: Sequence[str] = ()) -> list[str]:
+    """Return the fixed command line run inside the container.
+
+    The trusted launcher from the image starts pytest with the trusted
+    configuration file, so neither a ``pytest.py`` nor a ``pytest.ini`` in the
+    workspace can change how tests are run. Only source roots and targets vary.
+    """
+    argv = ["python", "-P", "-s", "-B", LAUNCHER_PATH]
+    for root in source_roots:
+        argv += ["--source-root", f"{WORKSPACE_DIR}/{validate_relative_path(root)}"]
     return [
-        "python",
-        "-m",
-        "pytest",
+        *argv,
+        "--",
+        "-c",
+        PYTEST_CONFIG_PATH,
+        "--rootdir",
+        WORKSPACE_DIR,
         "-p",
         "no:cacheprovider",
-        "-o",
-        "junit_family=xunit2",
         f"--junitxml={JUNIT_PATH}",
         "--color=no",
         "-q",
@@ -216,13 +228,8 @@ def build_pytest_argv(command: PytestCommand) -> list[str]:
 
 def build_exec_argv(name: str, command: PytestCommand, source_roots: Sequence[str]) -> list[str]:
     """Return the ``docker exec`` command that runs the tests."""
-    argv = ["exec", "--user", SANDBOX_USER, "--workdir", WORKSPACE_DIR]
-    if source_roots:
-        pythonpath = ":".join(
-            f"{WORKSPACE_DIR}/{validate_relative_path(root)}" for root in source_roots
-        )
-        argv += ["--env", f"PYTHONPATH={pythonpath}"]
-    return [*argv, name, *build_pytest_argv(command)]
+    argv = ["exec", "--user", SANDBOX_USER, "--workdir", WORKSPACE_DIR, name]
+    return [*argv, *build_pytest_argv(command, source_roots)]
 
 
 def classify(
@@ -240,6 +247,30 @@ def classify(
         # sandbox cannot say why, so it does not blame the code under test.
         return SandboxStatus.INFRASTRUCTURE_ERROR
     return _PYTEST_EXIT_STATUS.get(exit_code, SandboxStatus.RUNNER_ERROR)
+
+
+def find_report_issues(
+    exit_code: int | None, report: JUnitReport | None, read_problem: str | None
+) -> tuple[str, ...]:
+    """Cross-check pytest's exit status against its JUnit report.
+
+    Only meaningful when pytest ended by itself with "all passed" (0) or
+    "some failed" (1); for every other ending the status already says the run
+    produced no usable result.
+    """
+    if exit_code not in (0, 1):
+        return ()
+    if report is None:
+        return (read_problem or "no JUnit report was produced",)
+    issues = list(report.issues)
+    unsuccessful = report.counts.failed + report.counts.errors
+    if exit_code == 0 and unsuccessful:
+        issues.append(f"exit status 0, but the report lists {unsuccessful} unsuccessful tests")
+    if exit_code == 0 and report.counts.total == 0:
+        issues.append("exit status 0, but the report lists no tests")
+    if exit_code == 1 and not unsuccessful:
+        issues.append("exit status 1, but the report lists no unsuccessful test")
+    return tuple(issues)
 
 
 def parse_limit_events(text: str) -> LimitEvents:
@@ -374,8 +405,16 @@ class DockerSandbox:
 
     # -- container lifecycle ---------------------------------------------
 
-    def _remove(self, name: str) -> None:
-        self._docker(["rm", "--force", "--volumes", name])
+    def _remove(self, name: str) -> bool:
+        """Force-remove a container and confirm that it is gone."""
+        try:
+            self._docker(["rm", "--force", "--volumes", name])
+            remaining = self._docker(
+                ["ps", "--all", "--quiet", "--filter", f"name=^/{name}$"],
+            )
+        except SandboxInfrastructureError:
+            return False
+        return not remaining.timed_out and remaining.exit_code == 0 and not remaining.stdout.strip()
 
     def _kill(self, name: str) -> None:
         self._docker(["kill", name])
@@ -391,9 +430,7 @@ class DockerSandbox:
     def remove_leftovers(self) -> list[str]:
         """Force-remove sandbox containers left behind by a crashed run."""
         names = self.list_containers()
-        for name in names:
-            self._remove(name)
-        return names
+        return [name for name in names if self._remove(name)]
 
     def _limit_events(self, name: str) -> LimitEvents:
         probe = "cat /sys/fs/cgroup/memory.events; echo ---; cat /sys/fs/cgroup/pids.events"
@@ -408,21 +445,21 @@ class DockerSandbox:
             return LimitEvents(oom_kill_count=1 if killed else None, pids_limit_hit=None)
         return LimitEvents(oom_kill_count=None, pids_limit_hit=None)
 
-    def _junit(self, name: str) -> tuple[str | None, Counts | None, tuple[CaseResult, ...]]:
+    def _junit(self, name: str) -> tuple[str | None, JUnitReport | None, str | None]:
+        """Read and parse the JUnit report. Return the text, the report and any problem."""
         result = self._docker(
             ["exec", "--user", SANDBOX_USER, name, "cat", JUNIT_PATH],
             max_output_bytes=MAX_JUNIT_BYTES + 1,
         )
         if result.timed_out or result.exit_code != 0 or not result.stdout:
-            return None, None, ()
+            return None, None, "no JUnit report was produced"
         if result.stdout_truncated or len(result.stdout) > MAX_JUNIT_BYTES:
-            return None, None, ()
+            return None, None, "the JUnit report exceeds the size limit"
         xml_text = _text(result.stdout)
         try:
-            counts, cases = parse_junit(xml_text)
-        except JUnitError:
-            return None, None, ()
-        return xml_text, counts, cases
+            return xml_text, parse_junit(xml_text), None
+        except JUnitError as exc:
+            return None, None, str(exc)
 
     def run(
         self,
@@ -442,7 +479,7 @@ class DockerSandbox:
         started_at = datetime.now(UTC)
         started = time.monotonic()
         name = f"patchpilot-{uuid.uuid4().hex[:16]}"
-        container_argv = tuple(build_pytest_argv(command))
+        container_argv = tuple(build_pytest_argv(command, source_roots))
         metadata: RunMetadata | None = None
 
         def failed(error: str) -> SandboxResult:
@@ -458,6 +495,12 @@ class DockerSandbox:
                 metadata=metadata,
             )
 
+        infrastructure_error: str | None = None
+        execution: ProcessResult | None = None
+        events = LimitEvents(oom_kill_count=None, pids_limit_hit=None)
+        junit_xml: str | None = None
+        report: JUnitReport | None = None
+        read_problem: str | None = None
         try:
             engine_version, engine_platform, engine_os, cgroup_version = self._engine_info()
             image = self.ensure_image()
@@ -486,17 +529,17 @@ class DockerSandbox:
                 max_output_bytes=limits.max_output_bytes,
                 on_timeout=lambda: self._kill(name),
             )
-            events = LimitEvents(oom_kill_count=None, pids_limit_hit=None)
-            junit_xml: str | None = None
-            counts: Counts | None = None
-            cases: tuple[CaseResult, ...] = ()
             if not execution.timed_out:
                 events = self._limit_events(name)
-                junit_xml, counts, cases = self._junit(name)
+                junit_xml, report, read_problem = self._junit(name)
         except SandboxInfrastructureError as exc:
-            return failed(str(exc))
+            infrastructure_error = str(exc)
         finally:
-            self._remove(name)
+            removed = self._remove(name)
+
+        if infrastructure_error is not None or execution is None:
+            failure = failed(infrastructure_error or "the sandbox did not run the command")
+            return failure.model_copy(update={"cleanup_failed": not removed})
 
         status = classify(
             execution.exit_code,
@@ -506,13 +549,16 @@ class DockerSandbox:
         error: str | None = None
         if status is SandboxStatus.INFRASTRUCTURE_ERROR:
             error = f"docker exec ended with exit code {execution.exit_code}"
+        report_issues: tuple[str, ...] = ()
+        if status in (SandboxStatus.PASSED, SandboxStatus.FAILED):
+            report_issues = find_report_issues(execution.exit_code, report, read_problem)
         return SandboxResult(
             status=status,
             command=command,
             container_argv=container_argv,
             exit_code=execution.exit_code,
-            counts=counts,
-            cases=cases,
+            counts=report.counts if report else None,
+            cases=report.cases if report else (),
             junit_xml=junit_xml,
             stdout=_text(execution.stdout),
             stderr=_text(execution.stderr),
@@ -523,5 +569,7 @@ class DockerSandbox:
             oom_kill_count=events.oom_kill_count,
             pids_limit_hit=events.pids_limit_hit,
             error=error,
+            report_issues=report_issues,
+            cleanup_failed=not removed,
             metadata=metadata,
         )

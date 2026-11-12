@@ -147,11 +147,25 @@ class SandboxResult(FrozenModel):
     oom_kill_count: int | None = None
     pids_limit_hit: bool | None = None
     error: str | None = None
+    report_issues: tuple[str, ...] = ()
+    cleanup_failed: bool = False
     metadata: RunMetadata | None = None
 
     @property
     def is_infrastructure_error(self) -> bool:
         return self.status is SandboxStatus.INFRASTRUCTURE_ERROR
+
+    @property
+    def report_is_consistent(self) -> bool:
+        """True when pytest finished and its report agrees with its exit status.
+
+        This catches a missing, malformed, duplicated or contradictory report.
+        It cannot catch code under test that forges both the report and the
+        exit status from inside the test process.
+        """
+        return (
+            self.status in (SandboxStatus.PASSED, SandboxStatus.FAILED) and not self.report_issues
+        )
 
     def outcomes(self) -> dict[str, CaseOutcome]:
         """Map each reported test node ID to its outcome."""

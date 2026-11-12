@@ -19,11 +19,13 @@ from patchpilot.sandbox.docker import (
     build_run_argv,
     classify,
     docker_client_env,
+    find_report_issues,
     image_definition,
     image_ref,
     parse_limit_events,
 )
-from patchpilot.sandbox.models import PytestCommand, SandboxLimits, SandboxStatus
+from patchpilot.sandbox.junit import JUnitReport
+from patchpilot.sandbox.models import Counts, PytestCommand, SandboxLimits, SandboxStatus
 from patchpilot.sandbox.process import ProcessResult
 from patchpilot.sandbox.tree import TreeError
 
@@ -69,6 +71,10 @@ def test_run_command_never_mounts_or_forwards_anything_from_the_host() -> None:
     assert not any("docker.sock" in part for part in argv)
 
 
+def test_the_engine_removes_the_container_when_it_exits() -> None:
+    assert "--rm" in build_run_argv("box", "image:tag", SandboxLimits())
+
+
 def test_the_container_only_sleeps_and_ends_by_itself() -> None:
     argv = build_run_argv("box", "image:tag", SandboxLimits(timeout_seconds=30))
 
@@ -80,12 +86,17 @@ def test_pytest_command_line_is_fixed_apart_from_targets() -> None:
 
     assert build_pytest_argv(command) == [
         "python",
-        "-m",
-        "pytest",
+        "-P",
+        "-s",
+        "-B",
+        "/opt/patchpilot/run_tests.py",
+        "--",
+        "-c",
+        "/opt/patchpilot/pytest.ini",
+        "--rootdir",
+        "/workspace",
         "-p",
         "no:cacheprovider",
-        "-o",
-        "junit_family=xunit2",
         "--junitxml=/tmp/.patchpilot/junit.xml",
         "--color=no",
         "-q",
@@ -93,11 +104,16 @@ def test_pytest_command_line_is_fixed_apart_from_targets() -> None:
     ]
 
 
-def test_source_roots_become_a_workspace_pythonpath() -> None:
+def test_source_roots_are_passed_to_the_trusted_launcher_not_the_environment() -> None:
     argv = build_exec_argv("box", COMMAND, ["src", "lib/py"])
+    pairs = _pairs(argv)
 
-    assert ("--env", "PYTHONPATH=/workspace/src:/workspace/lib/py") in _pairs(argv)
-    assert ("--user", "10001:10001") in _pairs(argv)
+    assert ("--source-root", "/workspace/src") in pairs
+    assert ("--source-root", "/workspace/lib/py") in pairs
+    assert argv.index("--source-root") < argv.index("--")
+    assert ("--user", "10001:10001") in pairs
+    assert "--env" not in argv
+    assert not any(part.startswith("PYTHONPATH") for part in argv)
 
 
 def test_a_source_root_cannot_escape_the_workspace() -> None:
@@ -133,6 +149,8 @@ def test_image_definition_is_pinned_and_hash_checked() -> None:
     assert "USER 10001:10001" in dockerfile
     assert "pytest==" in lock
     assert "--hash=sha256:" in lock
+    assert set(definition) == {"Dockerfile", "requirements.lock", "run_tests.py", "pytest.ini"}
+    assert "COPY run_tests.py pytest.ini /opt/patchpilot/" in dockerfile
     assert image_ref().startswith("patchpilot-sandbox:")
 
 
@@ -179,7 +197,15 @@ def test_missing_limit_events_are_unknown_not_zero() -> None:
 class FakeDocker:
     """Scripted stand-in for the docker client."""
 
-    def __init__(self, fail_on: str | None = None, raise_on: str | None = None) -> None:
+    def __init__(
+        self,
+        fail_on: str | None = None,
+        raise_on: str | None = None,
+        junit: bytes | None = None,
+        still_listed: bool = False,
+    ) -> None:
+        self._junit = junit
+        self._still_listed = still_listed
         self.calls: list[list[str]] = []
         self.envs: list[dict[str, str]] = []
         self._fail_on = fail_on
@@ -211,8 +237,15 @@ class FakeDocker:
             stdout = b"sha256:abc\n"
         elif args[0] == "exec" and "sh" in args:
             stdout = b"oom_kill 0\n---\nmax 0\n"
+        elif args[0] == "ps" and self._still_listed:
+            stdout = b"abc123\n"
+        elif args[0] == "exec" and "cat" in args and self._junit is not None:
+            stdout = self._junit
         elif args[0] == "exec" and "cat" in args:
-            stdout = b'<testsuite><testcase classname="tests.test_a" name="test_a"/></testsuite>'
+            stdout = (
+                b'<testsuite tests="1" failures="0" errors="0" skipped="0">'
+                b'<testcase classname="tests.test_a" name="test_a"/></testsuite>'
+            )
         return ProcessResult(
             exit_code=exit_code,
             stdout=stdout,
@@ -235,7 +268,10 @@ def test_a_successful_run_reports_results_and_removes_the_container() -> None:
     assert result.status is SandboxStatus.PASSED
     assert result.counts is not None and result.counts.passed == 1
     assert result.metadata is not None and result.metadata.image_id == "sha256:abc"
-    assert fake.calls[-1][:3] == ["rm", "--force", "--volumes"]
+    assert result.report_issues == ()
+    assert result.cleanup_failed is False
+    assert fake.calls[-2][:3] == ["rm", "--force", "--volumes"]
+    assert fake.calls[-1][0] == "ps"
 
 
 @pytest.mark.parametrize("failing_step", ["run", "exec"])
@@ -247,7 +283,7 @@ def test_the_container_is_removed_when_a_step_fails(failing_step: str) -> None:
     assert result.status is SandboxStatus.INFRASTRUCTURE_ERROR
     assert result.error is not None and "boom" in result.error
     assert result.counts is None
-    assert fake.verbs()[-1] == "rm"
+    assert fake.verbs()[-2:] == ["rm", "ps"]
 
 
 def test_a_missing_docker_client_is_an_infrastructure_error() -> None:
@@ -274,3 +310,63 @@ def test_an_unsafe_tree_is_refused_before_any_container_starts() -> None:
         DockerSandbox(process_runner=fake).run({"../escape.py": b""}, COMMAND)
 
     assert fake.calls == []
+
+
+def test_a_container_that_could_not_be_removed_is_reported() -> None:
+    fake = FakeDocker(still_listed=True)
+
+    result = DockerSandbox(process_runner=fake, environ={"PATH": "/bin"}).run(FILES, COMMAND)
+
+    assert result.cleanup_failed is True
+
+
+FAILING_REPORT = (
+    b'<testsuite tests="1" failures="1" errors="0" skipped="0">'
+    b'<testcase classname="tests.test_a" name="test_a"><failure message="x"/></testcase>'
+    b"</testsuite>"
+)
+
+
+def test_exit_status_zero_with_a_failing_report_is_inconsistent() -> None:
+    fake = FakeDocker(junit=FAILING_REPORT)
+
+    result = DockerSandbox(process_runner=fake, environ={"PATH": "/bin"}).run(FILES, COMMAND)
+
+    assert result.status is SandboxStatus.PASSED
+    assert not result.report_is_consistent
+    assert any("exit status 0" in issue for issue in result.report_issues)
+
+
+def test_exit_status_zero_without_any_report_is_inconsistent() -> None:
+    fake = FakeDocker(junit=b"")
+
+    result = DockerSandbox(process_runner=fake, environ={"PATH": "/bin"}).run(FILES, COMMAND)
+
+    assert result.report_issues == ("no JUnit report was produced",)
+    assert not result.report_is_consistent
+
+
+@pytest.mark.parametrize(
+    "exit_code,total,unsuccessful,consistent",
+    [
+        (0, 3, 0, True),
+        (1, 3, 1, True),
+        (0, 3, 1, False),
+        (0, 0, 0, False),
+        (1, 3, 0, False),
+    ],
+)
+def test_report_and_exit_status_must_agree(
+    exit_code: int, total: int, unsuccessful: int, consistent: bool
+) -> None:
+    counts = Counts(
+        total=total, passed=total - unsuccessful, failed=unsuccessful, errors=0, skipped=0
+    )
+    report = JUnitReport(counts=counts, cases=(), issues=())
+
+    assert (find_report_issues(exit_code, report, None) == ()) is consistent
+
+
+def test_other_endings_are_not_cross_checked() -> None:
+    assert find_report_issues(2, None, "no JUnit report was produced") == ()
+    assert find_report_issues(None, None, None) == ()

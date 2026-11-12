@@ -202,7 +202,9 @@ def test_source_roots_are_importable_and_metadata_is_recorded(sandbox: DockerSan
     assert metadata.source_roots == ("src",)
     assert len(metadata.source_tree_sha256) == 64
     assert metadata.limits == SMALL
-    assert result.container_argv[:3] == ("python", "-m", "pytest")
+    assert "/opt/patchpilot/run_tests.py" in result.container_argv
+    assert result.report_is_consistent
+    assert result.cleanup_failed is False
 
 
 def test_two_runs_of_the_same_tree_agree(sandbox: DockerSandbox) -> None:

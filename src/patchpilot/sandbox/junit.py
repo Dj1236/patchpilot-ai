@@ -6,6 +6,8 @@ rules out entity-expansion and external-entity tricks before parsing.
 """
 
 import xml.etree.ElementTree as ET
+from collections import Counter
+from dataclasses import dataclass
 
 from patchpilot.sandbox.models import CaseOutcome, CaseResult, Counts
 
@@ -16,6 +18,19 @@ _MAX_CASES = 20_000
 
 class JUnitError(ValueError):
     """The JUnit report is missing, malformed or unsafe to parse."""
+
+
+@dataclass(frozen=True)
+class JUnitReport:
+    """A parsed report plus anything about it that looks wrong.
+
+    ``issues`` is empty for a report pytest would normally write. Each entry
+    describes an internal inconsistency, such as a test listed twice.
+    """
+
+    counts: Counts
+    cases: tuple[CaseResult, ...]
+    issues: tuple[str, ...]
 
 
 def node_id_for(classname: str, name: str) -> str:
@@ -49,8 +64,23 @@ def _duration(case: ET.Element) -> float:
         return 0.0
 
 
-def parse_junit(xml_text: str) -> tuple[Counts, tuple[CaseResult, ...]]:
-    """Parse a JUnit report into counts and per-test results."""
+def _declared_totals(root: ET.Element) -> tuple[int, int, int, int] | None:
+    """Return the totals the report claims in its ``testsuite`` attributes."""
+    suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+    if not suites:
+        return None
+    totals = [0, 0, 0, 0]
+    for suite in suites:
+        for index, name in enumerate(("tests", "failures", "errors", "skipped")):
+            value = suite.get(name)
+            if value is None or not value.isdigit():
+                return None
+            totals[index] += int(value)
+    return totals[0], totals[1], totals[2], totals[3]
+
+
+def parse_junit(xml_text: str) -> JUnitReport:
+    """Parse a JUnit report into counts, per-test results and inconsistencies."""
     if len(xml_text.encode("utf-8", errors="replace")) > MAX_JUNIT_BYTES:
         raise JUnitError("JUnit report exceeds the size limit")
     upper = xml_text.upper()
@@ -90,4 +120,22 @@ def parse_junit(xml_text: str) -> tuple[Counts, tuple[CaseResult, ...]]:
         errors=count(CaseOutcome.ERROR),
         skipped=count(CaseOutcome.SKIPPED),
     )
-    return counts, tuple(cases)
+    issues: list[str] = []
+    repeated = sorted(
+        node_id for node_id, seen in Counter(case.node_id for case in cases).items() if seen > 1
+    )
+    if repeated:
+        issues.append(f"tests reported more than once: {repeated[:5]}")
+    unnamed = sum(1 for case in cases if not case.name)
+    if unnamed:
+        issues.append(f"{unnamed} test cases have no name")
+    declared = _declared_totals(root)
+    counted = (counts.total, counts.failed, counts.errors, counts.skipped)
+    if declared is None:
+        issues.append("the report does not declare its totals")
+    elif declared != counted:
+        issues.append(
+            f"declared totals {declared} do not match the listed test cases {counted} "
+            "(tests, failures, errors, skipped)"
+        )
+    return JUnitReport(counts=counts, cases=tuple(cases), issues=tuple(issues))

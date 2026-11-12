@@ -23,7 +23,8 @@ REPORT = """<?xml version="1.0" encoding="utf-8"?>
 
 
 def test_counts_and_outcomes_come_from_the_test_cases() -> None:
-    counts, cases = parse_junit(REPORT)
+    report = parse_junit(REPORT)
+    counts, cases = report.counts, report.cases
 
     assert (counts.total, counts.passed, counts.failed, counts.errors, counts.skipped) == (
         4,
@@ -42,12 +43,39 @@ def test_counts_and_outcomes_come_from_the_test_cases() -> None:
     assert cases[1].duration_seconds == pytest.approx(0.002)
 
 
-def test_suite_level_totals_are_not_trusted() -> None:
-    forged = '<testsuite tests="99" failures="0"><testcase classname="t" name="a"/></testsuite>'
+def test_a_normal_report_has_no_issues() -> None:
+    assert parse_junit(REPORT).issues == ()
 
-    counts, _ = parse_junit(forged)
 
-    assert counts.total == 1
+def test_declared_totals_that_disagree_with_the_cases_are_flagged() -> None:
+    forged = (
+        '<testsuite tests="99" failures="0" errors="0" skipped="0">'
+        '<testcase classname="t" name="a"/></testsuite>'
+    )
+
+    report = parse_junit(forged)
+
+    assert report.counts.total == 1
+    assert any("declared totals" in issue for issue in report.issues)
+
+
+def test_a_test_reported_twice_is_flagged() -> None:
+    doubled = (
+        '<testsuite tests="2" failures="1" errors="0" skipped="0">'
+        '<testcase classname="t" name="a"><failure message="x"/></testcase>'
+        '<testcase classname="t" name="a"/></testsuite>'
+    )
+
+    report = parse_junit(doubled)
+
+    assert any("more than once" in issue for issue in report.issues)
+
+
+def test_missing_totals_and_unnamed_cases_are_flagged() -> None:
+    report = parse_junit('<testsuite><testcase classname="t"/></testsuite>')
+
+    assert any("no name" in issue for issue in report.issues)
+    assert any("does not declare" in issue for issue in report.issues)
 
 
 def test_node_id_is_rebuilt_from_the_module_name() -> None:
@@ -86,12 +114,14 @@ def test_long_failure_messages_are_bounded() -> None:
         f'<failure message="{"m" * 5000}"/></testcase></testsuite>'
     )
 
-    _, cases = parse_junit(document)
+    cases = parse_junit(document).cases
 
     assert len(cases[0].message) == 500
 
 
 def test_a_bad_duration_does_not_break_parsing() -> None:
-    _, cases = parse_junit('<testsuite><testcase classname="t" name="a" time="soon"/></testsuite>')
+    cases = parse_junit(
+        '<testsuite><testcase classname="t" name="a" time="soon"/></testsuite>'
+    ).cases
 
     assert cases[0].duration_seconds == 0.0
