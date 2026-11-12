@@ -64,6 +64,42 @@ def test_never_finishes():
     time.sleep(600)
 """
 
+# Burns CPU for a fixed, short wall-clock time and measures how much CPU time
+# the whole container actually received, from the kernel's own accounting.
+CPU_PROBE = """
+import subprocess
+import sys
+import time
+
+BUSY = "import time\\nend = time.monotonic() + 2.0\\nwhile time.monotonic() < end:\\n    pass\\n"
+
+
+def _stat():
+    with open("/sys/fs/cgroup/cpu.stat") as handle:
+        return {key: int(value) for key, value in (line.split() for line in handle)}
+
+
+def test_cpu_time_is_capped_at_a_quarter_of_one_core():
+    with open("/sys/fs/cgroup/cpu.max") as handle:
+        quota, period = handle.read().split()
+    assert quota != "max"
+    assert int(quota) / int(period) == 0.25
+
+    before, started = _stat(), time.monotonic()
+    workers = [subprocess.Popen([sys.executable, "-c", BUSY]) for _ in range(3)]
+    for worker in workers:
+        worker.wait()
+    elapsed = time.monotonic() - started
+    after = _stat()
+
+    used = (after["usage_usec"] - before["usage_usec"]) / 1_000_000
+    share = used / elapsed
+    print(f"CPU_SHARE {share:.3f} over {elapsed:.2f}s")
+    # Three busy processes want three cores. They may get a quarter of one.
+    assert share < 0.40
+    assert after["nr_throttled"] > before["nr_throttled"]
+"""
+
 OUTPUT_FLOOD = """
 import sys
 
@@ -222,3 +258,18 @@ def test_two_runs_of_the_same_tree_agree(sandbox: DockerSandbox) -> None:
 
 def test_default_limits_are_at_least_as_generous_as_the_test_limits() -> None:
     assert SandboxLimits().memory_mb >= SMALL.memory_mb
+
+
+def test_cpu_limit_is_enforced(sandbox: DockerSandbox) -> None:
+    limits = SMALL.model_copy(update={"cpus": 0.25})
+
+    result = run_probe(sandbox, CPU_PROBE, limits)
+
+    assert_probe_passed(result, expected_tests=1)
+
+
+def test_cpu_probe_fails_without_a_tight_limit(sandbox: DockerSandbox) -> None:
+    # Control: with a full core allowed, the same probe must fail.
+    result = run_probe(sandbox, CPU_PROBE, SMALL.model_copy(update={"cpus": 1.0}))
+
+    assert result.status is SandboxStatus.FAILED
