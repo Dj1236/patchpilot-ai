@@ -44,8 +44,9 @@ tests that attack a real container; see [sandbox.md](sandbox.md) for the
 control-by-control evidence and the remaining limitations. Read-only issue
 intake, the allowlist, hardened fetching and the confined repository tools
 are implemented too; see [intake.md](intake.md). No write access to GitHub
-exists anywhere in the code. Patch policy, model prompts and spend caps
-arrive in later milestones.
+exists anywhere in the code. The patch policy, the
+prompt builder and the spend ledger are implemented as well; see
+[baseline.md](baseline.md). No live model call has been made yet.
 
 ## The add-only test rule
 

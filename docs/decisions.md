@@ -43,6 +43,10 @@ Each record states the decision, the reason, and what was rejected.
   `git diff`.
 - **Reason:** model-written unified diffs often fail to apply. An exact,
   unique match requirement removes guessing.
+- **Changed in Milestone 5:** the diff is computed with Python's `difflib`
+  from the before and after trees, because the snapshot is in memory and
+  there is no working tree for `git diff`. Tests confirm the result applies
+  with `git apply`.
 - **Rejected:** model-written diffs, whole-file rewrites (large and
   error-prone).
 
@@ -102,3 +106,14 @@ Each record states the decision, the reason, and what was rejected.
   only against `api.github.com`, and never given to git.
 - **Reason:** no credential ever reaches git or a sandbox.
 - **Rejected:** private repository support in V1.
+
+## 13. One attempt, no refusal fallback, caller-owned retries
+
+- **Decision:** the baseline explores with read-only tools and then gives
+  exactly one proposal with no test feedback. A declined request is recorded
+  as `model_refused`; no other model is tried. The SDK's retries are off and
+  PatchPilot retries a failed request at most once, budgeting each attempt.
+- **Reason:** the Milestone 6 loop should differ from the baseline in one
+  thing only, results must come from the model that was asked, and no request
+  may be sent without being counted.
+- **Rejected:** a no-tools baseline, server-side fallback, SDK retries.
