@@ -1,0 +1,51 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# PatchPilot runtime artifacts
+runs/
+workspaces/
+traces/
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# Hidden evaluation tests are never stored inside an agent-visible checkout
+evals/hidden/
+
+# Local AI-assistant and planning tool state
+.claude/
+.planning/
+.agents/
+.gstack/
+.code-review-graph/
+graphify-out/
+.mcp.json
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
