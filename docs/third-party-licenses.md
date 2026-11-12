@@ -1,0 +1,43 @@
+# Third-party licenses
+
+PatchPilot AI is released under the MIT License. It does not copy
+third-party source code into this repository; dependencies are installed
+from PyPI at the versions pinned in `uv.lock`.
+
+Licenses below were read from each installed package's metadata. Re-check
+this list whenever a dependency is added.
+
+## Runtime dependencies
+
+| Package | License |
+|---|---|
+| typer | MIT |
+| pydantic, pydantic-core | MIT |
+| pydantic-settings | MIT |
+| annotated-types, annotated-doc, typing-inspection | MIT |
+| rich, markdown-it-py, mdurl | MIT |
+| typing-extensions | PSF-2.0 |
+| python-dotenv | BSD-3-Clause |
+| pygments | BSD-2-Clause |
+| shellingham | ISC |
+
+## Development-only dependencies
+
+These are used to build and check the project and are not distributed with
+it.
+
+| Package | License |
+|---|---|
+| ruff | MIT |
+| mypy, mypy-extensions, librt, ast-serialize | MIT |
+| pytest, pytest-cov, pluggy, iniconfig | MIT |
+| pre-commit, cfgv, identify, virtualenv, filelock, platformdirs, python-discovery, pyyaml | MIT |
+| coverage | Apache-2.0 |
+| packaging | Apache-2.0 OR BSD-2-Clause |
+| nodeenv | BSD |
+| distlib | PSF-2.0 |
+| pathspec | MPL-2.0 |
+
+All of these are compatible with distributing PatchPilot AI under the MIT
+License. `pathspec` is under the weak-copyleft MPL-2.0; it is used
+unmodified as a development tool only.
