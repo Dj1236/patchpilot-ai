@@ -57,6 +57,8 @@ uv run patchpilot version
 - **Hidden evaluation tests never enter the agent's workspace, images or
   prompts.** Give an agent `Task.agent_view()` and `LoadedTask.agent_files()`
   only.
+- **Grade only through `grade_candidate`.** It rebuilds the tree from pinned
+  tests; never run hidden tests on a tree the candidate assembled.
 - **Never weaken a sandbox restriction to make a test pass.** Security tests
   must attack the real container, not check flags.
 - **No GitHub write without explicit approval.**

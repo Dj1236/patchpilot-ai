@@ -61,12 +61,19 @@ schema, but fetching it arrives with Milestone 4.
 A candidate tree is **resolved** when every fail-to-pass test passes and
 every pass-to-pass test still passes. Beyond that:
 
-- A listed test that is missing or skipped does not count as passing, so
-  deleting a test cannot resolve a task.
-- A candidate that contains a file at a hidden test's path is rejected.
-- A run that timed out, ran out of memory or hit a sandbox error is marked
-  untrustworthy. It is never resolved, and it is not evidence against the
-  patch either.
+- A listed test that is missing or skipped does not count as passing.
+- Grading runs on a tree built by the evaluator: source files from the
+  candidate, tests and runner configuration from the pinned starting state,
+  hidden tests added last. New test files in the candidate are left out.
+- A candidate that changed or deleted a test, added a `conftest.py` or
+  pytest configuration, or placed a file at a hidden test's path is recorded
+  as tampered and is never resolved.
+- A run that timed out, ran out of memory, hit a sandbox error, or produced
+  a report that contradicts pytest's exit status is marked untrustworthy. It
+  is never resolved, and it is not evidence against the patch either.
+
+What is trusted, and what cannot be detected, is set out in
+[grading-integrity.md](grading-integrity.md).
 
 Tests are identified by pytest node ID, rebuilt from the JUnit report. That
 mapping is exact only for module-level test functions, so V1 tasks do not
@@ -88,6 +95,10 @@ put listed tests inside classes.
    `tests/integration/test_fixture_tasks.py`.
 4. Run `uv run pytest`. The task is admitted only when `verify_fixture`
    passes.
+
+When a task is loaded, the hidden test files are parsed and every test
+function in them must be listed as fail-to-pass or pass-to-pass, and the
+other way round. The reference fix may not touch tests or configuration.
 
 Pre-commit hooks and Ruff are configured to leave `repo/` and `internal/`
 untouched, because reformatting a fixture would change its pin.

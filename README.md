@@ -31,6 +31,7 @@ evaluation task format are in place. No agent functionality exists yet.
 - [Technology decisions](docs/decisions.md)
 - [Sandbox](docs/sandbox.md)
 - [Evaluation tasks](docs/evaluation-tasks.md)
+- [Grading integrity](docs/grading-integrity.md)
 - [Third-party licenses](docs/third-party-licenses.md)
 - [CI status](docs/ci-status.md)
 

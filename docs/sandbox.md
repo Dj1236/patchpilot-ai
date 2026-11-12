@@ -14,9 +14,13 @@ therefore runs only approved repositories.
    imported. Symbolic links, special files and oversized trees are refused.
 2. A container starts from the PatchPilot image and does nothing but sleep.
 3. The tree is streamed into the container's workspace as a tar archive.
-4. The fixed pytest command line runs under a host-side timeout.
+4. A launcher baked into the image starts pytest with a configuration file
+   from the image, under a host-side timeout. Configuration files in the
+   workspace are not read.
 5. Limit events and the JUnit report are read back out.
-6. The container is force-removed, whatever happened.
+6. The container is force-removed, whatever happened, and the runner
+   confirms it is gone. The engine also removes it by itself if the host
+   process dies.
 
 Nothing from the host is mounted into the container. The workspace exists
 only in the container's memory and disappears with it.
@@ -41,12 +45,14 @@ container and passes only if it is refused
 | No host secrets | No environment variable is forwarded; the docker client itself gets an allowlisted environment | Probe with planted canaries in the host environment and on the host disk |
 | Memory limit | `--memory`, swap disabled | Probe allocates past the limit; run is reported as `out_of_memory` |
 | Process limit | `--pids-limit` | Probe spawns processes until refused; event is reported |
-| CPU limit | `--cpus` | Configuration only; not behavior-tested |
+| CPU limit | `--cpus` | Probe runs three busy processes for two seconds at a quarter-core limit; the kernel's accounting shows under 0.4 of a core used and throttling. Measured locally: 0.25 |
 | Time limit | Host timer, then `docker kill` | Probe ignores signals and sleeps; run is reported as `timeout` |
 | Output limit | Bounded capture on the host | Probe prints 20 MB; output is truncated and flagged |
-| Cleanup | `docker rm --force` in a `finally` block; container also ends by itself after a backstop | Every integration test asserts no container is left |
+| Cleanup | `docker rm --force` in a `finally` block, confirmed by listing; `--rm` plus a sleep backstop if the host process dies | Every integration test asserts no container is left; a failed removal is reported as `cleanup_failed` |
 | Controlled image | Base pinned by digest, hash-checked wheels only, no repository code in the build | Unit test on the image definition |
-| Fixed command | Only pytest targets are configurable, validated as plain relative paths | Unit tests |
+| Fixed command | Only pytest targets and source roots are configurable, validated as plain relative paths | Unit tests |
+| Trusted runner | Launcher and pytest configuration come from the image and are read-only | Probes: a `pytest.py` or `pytest.ini` in the workspace has no effect |
+| Report consistency | Exit status is cross-checked against the JUnit report | Unit and integration tests |
 
 ### Control tests
 
@@ -83,15 +89,25 @@ deterministic tests. Durations differ between runs.
 
 - **Shared kernel.** See the top of this page. Stronger isolation (gVisor or
   a microVM) is a requirement before accepting untrusted repositories.
-- **Results come from inside the sandbox.** The JUnit report and the output
-  are written next to the code under test, which could forge them. V1 accepts
-  this for approved repositories. The report is parsed defensively either way.
+- **Results come from inside the sandbox.** The JUnit report and the exit
+  status come from a process that runs the code under test. They are
+  cross-checked against each other, but code that patches pytest from inside
+  that process can forge both. See [grading-integrity.md](grading-integrity.md).
+- **The image is found by its local tag.** The tag is derived from the image
+  definition and the image ID is recorded with every result, but an image
+  with that tag built by someone else on the same machine would be used.
+- **Source trees are read without locking.** Symbolic links are refused, but
+  a file swapped while it is being read, or a hard link to a file outside
+  the tree, is not detected. Trees come from PatchPilot's own checkouts.
+- **File names are restricted** to letters, digits, `_`, `.` and `-`. A
+  repository with other characters in a file name is refused.
+- **If the container itself dies** (not just the test process), the engine
+  removes it and the cause is reported as an infrastructure error.
 - **The image build needs network access.** It fetches a digest-pinned base
   image and hash-checked wheels, and runs no repository code, but it does
   trust Docker Hub and PyPI to serve those exact artifacts.
 - **The base image is pinned, its contents are not audited.** Known
   vulnerabilities in the base image are not scanned for yet.
-- **CPU limiting is not behavior-tested.**
 - **Scratch space counts against memory.** Filling the workspace or `/tmp`
   uses memory from the same limit, so limits are validated to leave headroom.
 - **One image.** Tasks cannot yet declare their own pinned dependencies.
