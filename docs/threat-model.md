@@ -41,8 +41,11 @@ instructions in a model prompt.
 
 The sandbox controls in the table above are implemented and verified by
 tests that attack a real container; see [sandbox.md](sandbox.md) for the
-control-by-control evidence and the remaining limitations. Intake, patch
-policy, GitHub access and spend caps arrive in later milestones.
+control-by-control evidence and the remaining limitations. Read-only issue
+intake, the allowlist, hardened fetching and the confined repository tools
+are implemented too; see [intake.md](intake.md). No write access to GitHub
+exists anywhere in the code. Patch policy, model prompts and spend caps
+arrive in later milestones.
 
 ## The add-only test rule
 

@@ -6,8 +6,8 @@ before changing behavior.
 
 ## Current state
 
-Milestones 2 (foundation) and 3 (sandbox and task format) are built and
-verified locally. GitHub Actions cannot start on this account, so no CI gate
+Milestones 2 (foundation), 3 (sandbox and task format) and 4 (issue intake
+and repository tools) are built and verified locally. GitHub Actions cannot start on this account, so no CI gate
 has passed; see `docs/ci-status.md` and never describe CI as green. Each
 later milestone needs the owner's explicit authorization before work starts.
 See the milestone table in `docs/spec.md`.
@@ -32,13 +32,17 @@ uv run patchpilot version
 - `src/patchpilot/sandbox/`: restricted Docker runner, result models, safe
   tree packaging, JUnit parsing. `image/` holds the pinned image definition.
 - `src/patchpilot/tasks/`: evaluation task schema, loader and grading.
+- `src/patchpilot/intake/`: issue URL validation, allowlist, read-only GitHub
+  client, untrusted-text handling, intake pipeline.
+- `src/patchpilot/repo/`: hardened git fetch without checkout, in-memory
+  snapshot, read-only tools with budgets.
 - `evals/tasks/`: evaluation tasks. `repo/` is agent-visible; `internal/`
   never is. Fixture files are digest-pinned: do not reformat or edit them
   without updating the pin in `task.toml`.
 - `tests/unit/`: tests that need no network, Docker or model.
 - `tests/integration/`: tests that run real containers (marker `sandbox`).
-- `docs/`: specification, threat model, decision records, sandbox,
-  evaluation tasks, CI status, dependency licenses.
+- `docs/`: specification, threat model, decision records, sandbox, intake,
+  evaluation tasks, grading integrity, CI status, dependency licenses.
 
 ## Rules that must not be broken
 
@@ -53,7 +57,13 @@ uv run patchpilot version
   manifest, not from model output.
 - **Safety is enforced in code, not in prompts.** Allowlist, path
   confinement, patch policy and budgets are all checked outside the model.
-- **Issue text, repository content and test output are untrusted.**
+- **Issue text, repository content and test output are untrusted.** Keep them
+  in `UntrustedText`; do not add `reveal()` calls outside the modules listed
+  in `tests/unit/test_intake_text.py` without a reason stated in review.
+- **Never build a command, path or URL from issue or file content.** Remote
+  URLs come only from an allowlist entry.
+- **Never check out a fetched repository on the host.** Read it from git
+  objects into a snapshot.
 - **Hidden evaluation tests never enter the agent's workspace, images or
   prompts.** Give an agent `Task.agent_view()` and `LoadedTask.agent_files()`
   only.

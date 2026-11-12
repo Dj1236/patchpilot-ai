@@ -7,6 +7,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "httpx>=0.28.1",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
     "typer>=0.29.1",
@@ -63,6 +64,7 @@ addopts = "--strict-markers --strict-config -ra"
 xfail_strict = true
 markers = [
     "sandbox: needs a running Docker engine; skipped when none is reachable",
+    "network: makes real read-only requests to GitHub; runs only when PATCHPILOT_LIVE_GITHUB=1",
 ]
 
 [tool.coverage.run]

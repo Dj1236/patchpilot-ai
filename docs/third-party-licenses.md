@@ -20,6 +20,9 @@ this list whenever a dependency is added.
 | python-dotenv | BSD-3-Clause |
 | pygments | BSD-2-Clause |
 | shellingham | ISC |
+| httpx, httpcore, idna | BSD-3-Clause |
+| h11, anyio | MIT |
+| certifi | MPL-2.0 |
 
 ## Development-only dependencies
 
@@ -52,5 +55,5 @@ Docker CLI (Apache-2.0) and Colima (MIT) are used on the developer machine
 only.
 
 All of these are compatible with distributing PatchPilot AI under the MIT
-License. `pathspec` is under the weak-copyleft MPL-2.0; it is used
-unmodified as a development tool only.
+License. `pathspec` (development only) and `certifi` (a bundle of certificate
+authority certificates, used unmodified) are under the weak-copyleft MPL-2.0.
