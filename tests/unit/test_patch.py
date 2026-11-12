@@ -250,7 +250,6 @@ def test_existing_tests_and_configuration_may_not_be_edited(path: str, old: str)
     "path",
     [
         "conftest.py",
-        "tests/conftest.py2".replace("2", ""),
         "pytest.ini",
         "tox.ini",
         "setup.cfg",
@@ -263,8 +262,6 @@ def test_existing_tests_and_configuration_may_not_be_edited(path: str, old: str)
     ],
 )
 def test_only_new_test_files_may_be_added(path: str) -> None:
-    if path in FILES:
-        pytest.skip("covered by the existing-file rule")
     found = violations(regression_tests=[{"path": path, "content": "x = 1\n"}])
 
     assert found and path in found[0]
