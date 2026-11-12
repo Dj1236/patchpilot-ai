@@ -32,14 +32,14 @@ from patchpilot.agent.prompts import (
 )
 from patchpilot.agent.proposal import PROPOSAL_SCHEMA, PatchProposal, ProposalError, parse_proposal
 from patchpilot.agent.trace import TraceWriter
-from patchpilot.agent.verify import SandboxRunner, Verification, verify_patch
+from patchpilot.agent.verify import Verification, verify_patch
 from patchpilot.llm.base import ModelClient, ModelError, ModelRequest, ModelTurn, Usage
 from patchpilot.llm.budget import BudgetExceededError, RunBudget, UnknownModelPriceError
 from patchpilot.patch.apply import PatchError, apply_proposal, unified_diff
 from patchpilot.patch.policy import PolicyLimits, check_policy
 from patchpilot.repo.tools import BudgetExceededError as ToolBudgetExceededError
 from patchpilot.repo.tools import RepositoryTools, ToolBudget
-from patchpilot.sandbox.models import FrozenModel, PytestCommand, SandboxLimits
+from patchpilot.sandbox.models import FrozenModel, PytestCommand, SandboxLimits, SandboxRunner
 from patchpilot.sandbox.tree import tree_digest
 
 _RETRYABLE = ("timeout", "rate_limited", "connection")

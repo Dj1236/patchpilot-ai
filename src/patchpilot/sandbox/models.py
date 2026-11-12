@@ -1,8 +1,9 @@
 """Data models for sandboxed test execution."""
 
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -170,3 +171,16 @@ class SandboxResult(FrozenModel):
     def outcomes(self) -> dict[str, CaseOutcome]:
         """Map each reported test node ID to its outcome."""
         return {case.node_id: case.outcome for case in self.cases}
+
+
+class SandboxRunner(Protocol):
+    """Anything that can run a pytest command against a tree. In practice, the sandbox."""
+
+    def run(
+        self,
+        files: Mapping[str, bytes],
+        command: PytestCommand,
+        limits: SandboxLimits | None = None,
+        *,
+        source_roots: Sequence[str] = (),
+    ) -> SandboxResult: ...

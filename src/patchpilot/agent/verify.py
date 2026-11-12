@@ -8,7 +8,6 @@ tests, decides ``resolved``.
 """
 
 from collections.abc import Mapping, Sequence
-from typing import Protocol
 
 from patchpilot.agent.proposal import PatchProposal
 from patchpilot.sandbox.models import (
@@ -17,23 +16,11 @@ from patchpilot.sandbox.models import (
     PytestCommand,
     SandboxLimits,
     SandboxResult,
+    SandboxRunner,
     SandboxStatus,
 )
 
 _LIMIT_STATUSES = (SandboxStatus.TIMEOUT, SandboxStatus.OUT_OF_MEMORY)
-
-
-class SandboxRunner(Protocol):
-    """Anything that can run a pytest command against a tree. In practice, the sandbox."""
-
-    def run(
-        self,
-        files: Mapping[str, bytes],
-        command: PytestCommand,
-        limits: SandboxLimits | None = None,
-        *,
-        source_roots: Sequence[str] = (),
-    ) -> SandboxResult: ...
 
 
 class VerificationStep(FrozenModel):
