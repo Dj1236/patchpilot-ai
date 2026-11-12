@@ -1,5 +1,9 @@
 """Run a host process with a time limit and bounded output capture."""
 
+import contextlib
+import os
+import resource
+import signal
 import subprocess
 import threading
 import time
@@ -19,6 +23,7 @@ class ProcessResult:
     stderr_truncated: bool
     timed_out: bool
     duration_seconds: float
+    aborted: bool = False
 
 
 class _BoundedReader(threading.Thread):
@@ -63,6 +68,15 @@ def _feed(stream: IO[bytes], data: bytes) -> None:
         pass
 
 
+def _kill(process: subprocess.Popen[bytes], *, group: bool) -> None:
+    """Kill the process, and its whole process group when it leads one."""
+    if group:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(process.pid, signal.SIGKILL)
+    with contextlib.suppress(ProcessLookupError):
+        process.kill()
+
+
 def run_bounded(
     argv: Sequence[str],
     *,
@@ -71,13 +85,30 @@ def run_bounded(
     env: Mapping[str, str],
     input_bytes: bytes | None = None,
     on_timeout: Callable[[], None] | None = None,
+    new_process_group: bool = False,
+    max_file_bytes: int | None = None,
+    abort_when: Callable[[], bool] | None = None,
+    poll_interval: float = 0.05,
 ) -> ProcessResult:
     """Run ``argv`` without a shell, enforcing a timeout and an output cap.
 
     ``on_timeout`` runs before the local process is killed. The sandbox uses
     it to kill the container, because killing a ``docker exec`` client does
     not stop the process it started inside the container.
+
+    ``new_process_group`` starts the process as the leader of its own group
+    and kills the whole group at the end, so helper processes it spawned do
+    not outlive it. ``max_file_bytes`` sets the operating system's per-file
+    size limit for the process and its children. ``abort_when`` is polled
+    while the process runs; when it returns True the process is killed and
+    the result is marked ``aborted``. Polling means a limit checked this way
+    can be overshot by whatever the process does within one interval.
     """
+
+    def limit_file_size() -> None:
+        assert max_file_bytes is not None  # noqa: S101
+        resource.setrlimit(resource.RLIMIT_FSIZE, (max_file_bytes, max_file_bytes))
+
     started = time.monotonic()
     # argv is assembled by PatchPilot from validated values and runs with no shell.
     process = subprocess.Popen(  # noqa: S603
@@ -86,6 +117,8 @@ def run_bounded(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=dict(env),
+        start_new_session=new_process_group,
+        preexec_fn=limit_file_size if max_file_bytes is not None else None,
     )
     assert process.stdout is not None  # noqa: S101
     assert process.stderr is not None  # noqa: S101
@@ -102,16 +135,32 @@ def run_bounded(
         feeder.start()
 
     timed_out = False
-    try:
-        process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        timed_out = True
+    aborted = False
+    deadline = started + timeout
+    while True:
+        remaining = deadline - time.monotonic()
+        wait = max(remaining, 0.0) if abort_when is None else min(poll_interval, max(remaining, 0))
         try:
-            if on_timeout is not None:
+            process.wait(timeout=wait)
+            break
+        except subprocess.TimeoutExpired:
+            if abort_when is not None and abort_when():
+                aborted = True
+            elif time.monotonic() >= deadline:
+                timed_out = True
+            else:
+                continue
+        try:
+            if timed_out and on_timeout is not None:
                 on_timeout()
         finally:
-            process.kill()
+            _kill(process, group=new_process_group)
             process.wait()
+        break
+    if new_process_group:
+        # The leader is gone; make sure nothing it started is left behind.
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(process.pid, signal.SIGKILL)
 
     for reader in readers:
         reader.join(timeout=10)
@@ -121,11 +170,12 @@ def run_bounded(
         stream.close()
 
     return ProcessResult(
-        exit_code=None if timed_out else process.returncode,
+        exit_code=None if (timed_out or aborted) else process.returncode,
         stdout=readers[0].data,
         stderr=readers[1].data,
         stdout_truncated=readers[0].truncated,
         stderr_truncated=readers[1].truncated,
         timed_out=timed_out,
         duration_seconds=time.monotonic() - started,
+        aborted=aborted,
     )
