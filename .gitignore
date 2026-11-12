@@ -32,9 +32,6 @@ traces/
 *.db
 *.log
 
-# Hidden evaluation tests are never stored inside an agent-visible checkout
-evals/hidden/
-
 # Local AI-assistant and planning tool state
 .claude/
 .planning/
