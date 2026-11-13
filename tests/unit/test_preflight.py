@@ -17,6 +17,7 @@ from patchpilot.llm.fake import ScriptedModel, final_turn
 from patchpilot.llm.preflight import PreflightError, connect, first_request, run_preflight
 from patchpilot.sandbox.models import SandboxLimits
 from patchpilot.tasks import load_task
+from tests.gemini_wire import Wire, api_error
 
 TASKS_ROOT = Path(__file__).resolve().parents[2] / "evals" / "tasks"
 TASK = load_task(TASKS_ROOT / "inj-001-cachekit")
@@ -294,3 +295,113 @@ def test_the_command_refuses_an_unknown_task_before_contacting_anything(
     result = runner.invoke(cli.app, ["preflight", "--task", "no-such-task"])
 
     assert result.exit_code == 2 and "refused" in result.output
+
+
+# -- Gemini ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def gemini(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("PATCHPILOT_PROVIDER", "gemini")
+    monkeypatch.setenv("PATCHPILOT_RUNS_DIR", str(tmp_path))
+    monkeypatch.setenv("GEMINI_API_KEY", SECRET)
+
+
+def _preflight() -> Any:
+    return runner.invoke(cli.app, ["preflight", "--task", "inj-001-cachekit"])
+
+
+@pytest.mark.usefixtures("gemini")
+def test_the_gemini_preflight_uses_only_the_free_endpoints_and_labels_its_estimate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    wire = Wire(count=1800)
+    monkeypatch.setattr(cli, "gemini_connect", wire.client)
+
+    result = _preflight()
+
+    assert result.exit_code == 0, result.output
+    assert "provider: gemini" in result.output
+    assert "model: gemini-3.8-flash (Gemini 3.8 Flash)" in result.output
+    assert "input tokens counted by the provider: 1800" in result.output
+    assert "the token count is an estimate" in result.output
+    assert "nothing is charged unless the key's project has billing enabled" in result.output
+    assert "free tier confirmed by the owner: NO" in result.output
+    assert [line.split("/v1/")[1] for line in wire.requests] == [
+        "models/gemini-3.8-flash",
+        "models/gemini-3.8-flash:countTokens",
+    ]
+    assert wire.sent == [], "preflight must never generate"
+    assert SECRET not in result.output
+    assert not (tmp_path / "ledger.jsonl").exists(), "preflight reserves nothing"
+
+
+@pytest.mark.usefixtures("gemini")
+@pytest.mark.parametrize(
+    ("wire", "kind"),
+    [
+        (Wire(model_info=api_error(404, "model_not_found")), "model_unavailable"),
+        (Wire(model_info=api_error(403, "permission_denied")), "permission"),
+        (Wire(model_info=api_error(401, "authentication")), "authentication"),
+        (
+            Wire(
+                model_info=(
+                    400,
+                    {"error": {"code": 400, "details": [{"reason": "API_KEY_INVALID"}]}},
+                )
+            ),
+            "authentication",
+        ),
+        (Wire(count=api_error(429, "quota_exceeded")), "quota_exhausted"),
+        (Wire(count=api_error(429, "rate_limit_exceeded")), "rate_limited"),
+        (Wire(count=api_error(503, "service_unavailable")), "connection"),
+    ],
+)
+def test_gemini_preflight_failures_have_a_clear_kind(
+    monkeypatch: pytest.MonkeyPatch, wire: Wire, kind: str
+) -> None:
+    monkeypatch.setattr(cli, "gemini_connect", wire.client)
+
+    result = _preflight()
+
+    assert result.exit_code == 1 and f"preflight failed ({kind})" in result.output
+    assert "provider detail" not in result.output and SECRET not in result.output
+    assert "Traceback" not in result.output and wire.sent == []
+
+
+@pytest.mark.usefixtures("gemini")
+@pytest.mark.parametrize(
+    ("unset", "name", "value"),
+    [
+        ("GEMINI_API_KEY", "", ""),
+        ("", "GOOGLE_GENAI_USE_VERTEXAI", "true"),
+        ("", "GOOGLE_API_KEY", "some-other-key"),
+    ],
+)
+def test_gemini_preflight_refuses_a_missing_key_and_billed_modes_before_any_request(
+    monkeypatch: pytest.MonkeyPatch, unset: str, name: str, value: str
+) -> None:
+    if unset:
+        monkeypatch.delenv(unset)
+    if name:
+        monkeypatch.setenv(name, value)
+
+    result = _preflight()
+
+    assert result.exit_code == 1 and "preflight failed (not_configured)" in result.output
+    assert "Traceback" not in result.output
+
+
+@pytest.mark.usefixtures("gemini")
+def test_a_live_gemini_run_needs_the_owners_free_tier_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "patchpilot.llm.gemini_client.connect",
+        lambda *args, **kwargs: pytest.fail("a client was built without the confirmation"),
+    )
+
+    result = runner.invoke(cli.app, ["run", "--task", "inj-001-cachekit", "--live"])
+
+    assert result.exit_code == 2
+    assert "PATCHPILOT_GEMINI_FREE_TIER_CONFIRMED=1" in result.output

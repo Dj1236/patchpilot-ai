@@ -27,6 +27,13 @@ this list whenever a dependency is added.
 | httpx2, httpcore2 | BSD-3-Clause |
 | jiter, docstring-parser, truststore | MIT |
 | sniffio | MIT OR Apache-2.0 |
+| google-genai, google-auth, requests, tenacity, distro | Apache-2.0 |
+| cryptography | Apache-2.0 OR BSD-3-Clause |
+| urllib3, charset-normalizer | MIT |
+| cffi | MIT-0 |
+| websockets, pycparser | BSD-3-Clause |
+| pyasn1 | BSD-2-Clause |
+| pyasn1-modules | BSD |
 
 `httpx2-jsfetch` appears in `uv.lock` for other platforms. It is not installed
 here, so its license was not read from metadata.

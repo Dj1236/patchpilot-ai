@@ -20,7 +20,13 @@ from patchpilot.llm.base import ModelError, ModelRequest, ModelTurn
 from patchpilot.llm.fake import Scripted, ScriptedModel, ScriptExhaustedError
 
 TRACE_FILE = "trace.jsonl"
-_SECRET_VARIABLES = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "PATCHPILOT_GITHUB_TOKEN")
+_SECRET_VARIABLES = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "PATCHPILOT_GITHUB_TOKEN",
+)
 _MIN_SECRET_LENGTH = 8
 REDACTED = "[redacted]"
 

@@ -9,6 +9,7 @@ and the request is well formed enough to be counted. It does not guarantee
 that the first paid request will succeed.
 """
 
+import json
 from typing import Any, Literal
 
 from patchpilot.agent.baseline import RunLimits
@@ -22,7 +23,7 @@ from patchpilot.agent.prompts import (
 from patchpilot.agent.proposal import PROPOSAL_SCHEMA
 from patchpilot.agent.trace import redact, secrets_from_environment
 from patchpilot.llm.anthropic_client import AnthropicModel
-from patchpilot.llm.base import ModelRequest
+from patchpilot.llm.base import ModelError, ModelRequest
 from patchpilot.llm.budget import prices_for, to_micro, worst_case_cost
 from patchpilot.sandbox.models import FrozenModel, PytestCommand
 
@@ -33,6 +34,8 @@ PreflightFailure = Literal[
     "model_unavailable",
     "malformed_request",
     "rate_limited",
+    "quota_exhausted",
+    "not_configured",
     "connection",
     "provider_error",
 ]
@@ -51,6 +54,7 @@ class PreflightError(Exception):
 
 
 class PreflightReport(FrozenModel):
+    provider: str
     task_id: str
     model: str
     model_display_name: str | None
@@ -147,7 +151,7 @@ def run_preflight(
     """Check the model and count the request. Only free endpoints are called."""
     import anthropic
 
-    prices = prices_for(request.model)
+    prices_for(request.model)  # a model with no pinned price is refused before any request
     try:
         model = client.models.retrieve(request.model)
     except anthropic.AnthropicError as error:
@@ -167,10 +171,108 @@ def run_preflight(
 
     # The same padded count the paid path reserves with.
     reserved_tokens = AnthropicModel(_Counted(tokens)).count_input_tokens(request)
+    return _report(
+        "anthropic",
+        request,
+        tokens,
+        reserved_tokens,
+        getattr(model, "display_name", None),
+        task_id=task_id,
+        run_cap_usd=run_cap_usd,
+        total_cap_usd=total_cap_usd,
+        ledger_committed_micro_usd=ledger_committed_micro_usd,
+    )
+
+
+def _gemini_failure(error: Exception, during: str) -> PreflightError:
+    from patchpilot.llm.gemini_client import describe_error, failure
+
+    status, code, _ = describe_error(error)
+    body = getattr(error, "details", None) or getattr(error, "body", None)
+    kind: PreflightFailure
+    if "api_key_invalid" in json.dumps(body, default=str).lower():
+        # The provider reports a bad key as a malformed request.
+        status = 401
+    by_status: dict[int | None, tuple[PreflightFailure, str]] = {
+        400: ("malformed_request", "the provider rejected the request as malformed"),
+        401: ("authentication", "the provider rejected the credential"),
+        403: ("permission", "the credential or its project may not use this model"),
+        404: ("model_unavailable", "the model was not found for this credential"),
+    }
+    if not isinstance(error, ModelError) and status in by_status:
+        kind, summary = by_status[status]
+        return PreflightError(kind, f"{during}: {summary}" + (f" ({code})" if code else ""))
+    model_error = failure(error)
+    kinds: dict[str, PreflightFailure] = {
+        "rate_limited": "rate_limited",
+        "quota_exhausted": "quota_exhausted",
+        "not_configured": "not_configured",
+        "connection": "connection",
+        "timeout": "connection",
+    }
+    return PreflightError(kinds.get(model_error.kind, "provider_error"), f"{during}: {model_error}")
+
+
+def run_gemini_preflight(
+    client: Any,
+    request: ModelRequest,
+    *,
+    task_id: str,
+    run_cap_usd: float,
+    total_cap_usd: float,
+    ledger_committed_micro_usd: int,
+) -> PreflightReport:
+    """Check the model and estimate the request. Only free endpoints are called.
+
+    The counting endpoint takes plain content, so the request is counted as
+    one text. This confirms the key and the model, and sizes the request; it
+    does not prove the provider accepts the tools, the answer schema or the
+    thinking setting. The first generation request is the first real check.
+    """
+    from patchpilot.llm.gemini_client import GeminiModel, padded
+
+    prices_for(request.model)  # a model with no pinned price is refused before any request
+    try:
+        model = client.models.get(model=request.model)
+    except Exception as error:
+        raise _gemini_failure(error, "checking the model") from None
+    try:
+        counted = client.models.count_tokens(
+            model=request.model, contents=GeminiModel.flattened(request)
+        )
+        tokens = int(counted.total_tokens)
+    except Exception as error:
+        raise _gemini_failure(error, "counting input tokens") from None
+    return _report(
+        "gemini",
+        request,
+        tokens,
+        padded(tokens),
+        getattr(model, "display_name", None),
+        task_id=task_id,
+        run_cap_usd=run_cap_usd,
+        total_cap_usd=total_cap_usd,
+        ledger_committed_micro_usd=ledger_committed_micro_usd,
+    )
+
+
+def _report(
+    provider: str,
+    request: ModelRequest,
+    tokens: int,
+    reserved_tokens: int,
+    display: object,
+    *,
+    task_id: str,
+    run_cap_usd: float,
+    total_cap_usd: float,
+    ledger_committed_micro_usd: int,
+) -> PreflightReport:
+    prices = prices_for(request.model)
     reservation = worst_case_cost(reserved_tokens, request.max_tokens, prices)
     run_cap, total_cap = to_micro(run_cap_usd), to_micro(total_cap_usd)
-    display = getattr(model, "display_name", None)
     return PreflightReport(
+        provider=provider,
         task_id=task_id,
         model=request.model,
         model_display_name=display if isinstance(display, str) else None,

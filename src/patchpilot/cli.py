@@ -17,9 +17,16 @@ from patchpilot.intake.allowlist import AllowlistError, RepositoryNotApprovedErr
 from patchpilot.intake.github import GitHubClient, GitHubError
 from patchpilot.intake.pipeline import run_intake
 from patchpilot.intake.urls import IssueUrlError
-from patchpilot.llm.base import ModelClient
+from patchpilot.llm.base import ModelClient, ModelError
 from patchpilot.llm.budget import BudgetExceededError, SpendLedger, usd
-from patchpilot.llm.preflight import PreflightError, connect, first_request, run_preflight
+from patchpilot.llm.gemini_client import connect as gemini_connect
+from patchpilot.llm.preflight import (
+    PreflightError,
+    connect,
+    first_request,
+    run_gemini_preflight,
+    run_preflight,
+)
 from patchpilot.repo.fetch import FetchError
 from patchpilot.sandbox.docker import DockerSandbox
 from patchpilot.tasks.loader import TaskError, discover_tasks, load_task
@@ -97,7 +104,10 @@ def intake(
 
 
 TASKS_ROOT = Path("evals/tasks")
-_LIVE_HELP = "Make paid model API calls. Needs credentials and the owner's authorization."
+_LIVE_HELP = (
+    "Make real model API calls, paid unless the provider's free tier applies. "
+    "Needs credentials and the owner's authorization."
+)
 
 
 def _refuse(message: str) -> typer.Exit:
@@ -105,7 +115,22 @@ def _refuse(message: str) -> typer.Exit:
     return typer.Exit(code=2)
 
 
-def _live_model() -> ModelClient:
+def _live_model(settings: Settings) -> ModelClient:
+    """Build the client of the configured provider. There is no fallback to another one."""
+    if settings.provider == "gemini":
+        if not settings.gemini_free_tier_confirmed:
+            # Whether a key is billed is a property of its project that code cannot see.
+            raise _refuse(
+                "a live Gemini run needs the owner's confirmation that the key's project "
+                "has no billing account: check it, then set "
+                "PATCHPILOT_GEMINI_FREE_TIER_CONFIRMED=1"
+            )
+        from patchpilot.llm.gemini_client import GeminiModel
+
+        try:
+            return GeminiModel()
+        except ModelError as error:
+            raise _refuse(str(error)) from None
     from patchpilot.llm.anthropic_client import AnthropicModel
 
     return AnthropicModel()
@@ -138,7 +163,7 @@ def run(
     settings = Settings()
     try:
         loaded = load_task(tasks_root / task)
-        model = _live_model() if live else replay_model(replay)  # type: ignore[arg-type]
+        model = _live_model(settings) if live else replay_model(replay)  # type: ignore[arg-type]
     except (TaskError, TraceError) as error:
         raise _refuse(str(error)) from None
     directory = _output_dir(settings)
@@ -152,6 +177,7 @@ def run(
             ledger=ledger,
             run_cap_usd=settings.run_cap_usd,
             output_dir=directory,
+            limits=RunLimits.for_provider(settings.provider),
         )
     except TraceError as error:
         typer.echo(f"failed: {error}", err=True)
@@ -185,7 +211,7 @@ def evaluate_tasks(
     except TaskError as error:
         raise _refuse(str(error)) from None
     directory = _output_dir(settings)
-    model = _live_model()
+    model = _live_model(settings)
     summary = evaluate(
         tasks,
         runs_per_task=runs,
@@ -194,6 +220,7 @@ def evaluate_tasks(
         ledger=SpendLedger(settings.runs_dir / "ledger.jsonl", settings.max_cost_usd),
         run_cap_usd=settings.run_cap_usd,
         output_dir=directory,
+        limits=RunLimits.for_provider(settings.provider),
     )
     table = summary_table(summary)
     (directory / "summary.md").write_text(table)
@@ -220,12 +247,14 @@ def preflight(
         BugDescription.from_issue(view.issue),
         source_roots=view.environment.source_roots,
         commands=view.commands,
-        limits=RunLimits(),
+        limits=RunLimits.for_provider(settings.provider),
     )
     ledger = SpendLedger(settings.runs_dir / "ledger.jsonl", settings.max_cost_usd)
+    gemini = settings.provider == "gemini"
     try:
-        report = run_preflight(
-            connect(),
+        check = run_gemini_preflight if gemini else run_preflight
+        report = check(
+            gemini_connect() if gemini else connect(),
             request,
             task_id=view.task_id,
             run_cap_usd=settings.run_cap_usd,
@@ -235,11 +264,16 @@ def preflight(
     except PreflightError as error:
         typer.echo(f"preflight failed ({error.kind}): {error}", err=True)
         raise typer.Exit(code=1) from None
+    except ModelError as error:
+        # Raised while building the client, before any request is sent.
+        typer.echo(f"preflight failed ({error.kind}): {error}", err=True)
+        raise typer.Exit(code=1) from None
     except BudgetExceededError as error:
         # Raised while reading the ledger, before any request is sent.
         typer.echo(f"preflight failed (ledger_unreadable): {error}", err=True)
         raise typer.Exit(code=1) from None
     typer.echo(f"task: {report.task_id}")
+    typer.echo(f"provider: {report.provider}")
     typer.echo(f"model: {report.model} ({report.model_display_name or 'no display name'})")
     typer.echo(f"effort: {report.effort}, adaptive thinking")
     typer.echo(f"prompt hash: {report.prompt_sha256}")
@@ -261,6 +295,17 @@ def preflight(
         f"${usd(report.ledger_committed_micro_usd):.4f}, "
         f"fits: {'yes' if report.fits_total_cap else 'NO'}"
     )
+    if gemini:
+        confirmed = "yes" if settings.gemini_free_tier_confirmed else "NO"
+        typer.echo(
+            "the token count is an estimate: the request was flattened to text for the "
+            "counting endpoint, so tools, schema and thinking settings were not validated"
+        )
+        typer.echo(
+            "free tier: the amounts above are list-price exposure; nothing is charged "
+            "unless the key's project has billing enabled"
+        )
+        typer.echo(f"free tier confirmed by the owner: {confirmed}")
     typer.echo("no generation request was made; this does not guarantee a paid request succeeds")
     if not (report.fits_run_cap and report.fits_total_cap):
         raise typer.Exit(code=1)

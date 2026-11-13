@@ -22,6 +22,14 @@ RECORD_FILE = "record.json"
 REPORT_FILE = "report.md"
 _MAX_QUOTED_CHARS = 1500
 _MAX_DIFF_CHARS = 20_000
+# On a free tier the ledger amount is what the run would cost at list price,
+# not money spent.
+_FREE_TIER_NOTE = {
+    "gemini": (
+        " (list-price upper bound; the free tier charges nothing unless the key's "
+        "project has billing enabled)"
+    )
+}
 
 _STATUS_MEANING = {
     RunStatus.CANDIDATE_VERIFIED: (
@@ -80,7 +88,8 @@ def public_report(record: RunRecord, resolved: bool | None = None) -> str:
         f"- **Tokens:** {record.usage.input_tokens} input, {record.usage.output_tokens} output, "
         f"{record.usage.cache_read_input_tokens} cache read, "
         f"{record.usage.cache_creation_input_tokens} cache write",
-        f"- **Cost:** ${usd(record.cost_micro_usd):.4f} of a ${manifest.run_cap_usd:.2f} run cap",
+        f"- **Cost:** ${usd(record.cost_micro_usd):.4f} of a ${manifest.run_cap_usd:.2f} run cap"
+        + _FREE_TIER_NOTE.get(manifest.provider, ""),
         f"- **Duration:** {record.duration_seconds:.1f} s",
         "",
     ]
@@ -122,8 +131,9 @@ def public_report(record: RunRecord, resolved: bool | None = None) -> str:
     lines += [
         "## Manifest",
         "",
-        f"- Model requested: `{manifest.model_requested}`, reported: "
-        f"`{', '.join(manifest.models_reported) or 'none'}`, effort `{manifest.effort}`",
+        f"- Provider: `{manifest.provider}`. Model requested: `{manifest.model_requested}`, "
+        f"reported: `{', '.join(manifest.models_reported) or 'none'}`, "
+        f"effort `{manifest.effort}`",
         f"- Prompt hash: `{manifest.prompt_sha256}`",
         f"- Configuration hash: `{manifest.config_sha256}`",
         f"- Repository digest: `{manifest.repository_tree_sha256}`"

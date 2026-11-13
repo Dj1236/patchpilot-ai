@@ -8,11 +8,13 @@ before changing behavior.
 
 Milestones 2 to 4 and the Milestone 5 baseline agent (steps 1 to 11) are
 merged and verified locally, and so is the free `patchpilot preflight`
-command. No live model call has been made, and the preflight has not been run
-with a credential. The next step is the live pilot in `docs/pilot-plan.md`:
-it is planned but not authorized, its thresholds are confirmed, and each
-live run needs its own go-ahead. PatchPilot does not load `.env`; the
-key comes from the process environment.
+command. The owner will not buy model credits during development: the pilot
+uses free-tier Gemini (`PATCHPILOT_PROVIDER=gemini`, `gemini-3.8-flash`),
+tested offline only; the Anthropic adapter stays as an optional provider. No
+live model call has been made, and the preflight has not been run with a
+credential. The next step is the one-run live pilot in `docs/pilot-plan.md`:
+it is planned but not authorized, and each live run needs its own go-ahead.
+PatchPilot does not load `.env`; the key comes from the process environment.
 Milestone 6 is not started and waits for measured live results. GitHub Actions cannot start on this account, so no CI gate
 has passed; see `docs/ci-status.md` and never describe CI as green. Each
 later milestone needs the owner's explicit authorization before work starts.
@@ -42,7 +44,7 @@ uv run patchpilot preflight --task <id>   # free, but contacts the API: needs a 
 - `src/patchpilot/intake/`: issue URL validation, allowlist, read-only GitHub
   client, untrusted-text handling, intake pipeline.
 - `src/patchpilot/llm/`: provider interface, scripted fake model, spend
-  ledger, Anthropic client.
+  ledger, Anthropic client, Gemini client, preflight.
 - `src/patchpilot/agent/`: prompts, proposal format, baseline pipeline,
   sandbox verification, traces, reports.
 - `src/patchpilot/patch/`: safe edit application, diff, patch policy.
@@ -59,10 +61,17 @@ uv run patchpilot preflight --task <id>   # free, but contacts the API: needs a 
 
 ## Rules that must not be broken
 
-- **No paid model calls without authorization.** Tests use the scripted
-  fake model. Never pass `--live`, set an API key or construct
-  `AnthropicModel()` for a real request without the owner's go-ahead for
-  that specific run.
+- **No live model calls without authorization, free tier included.** Tests
+  use the scripted fake model or a local transport. Never pass `--live`, set
+  an API key or construct `AnthropicModel()` or `GeminiModel()` for a real
+  request without the owner's go-ahead for that specific run.
+- **No fallback to another model or provider.** One pinned model per
+  provider. Gemini runs only on the free tier: never enable Vertex AI,
+  enterprise mode or a billed key, and never set
+  `PATCHPILOT_GEMINI_FREE_TIER_CONFIRMED` yourself; that is the owner's
+  statement.
+- **Results name their provider and model.** Never pool or compare results
+  from different models as if they were one experiment.
 - **Every model request is reserved in the spend ledger before it is sent**
   and settled after. Failed requests are charged in full.
 - **`candidate_verified` is not `resolved`.** Only hidden-test grading

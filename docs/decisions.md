@@ -117,3 +117,29 @@ Each record states the decision, the reason, and what was rejected.
   thing only, results must come from the model that was asked, and no request
   may be sent without being counted.
 - **Rejected:** a no-tools baseline, server-side fallback, SDK retries.
+
+## 14. Gemini as a second provider, free tier, for the pilot
+
+- **Decision:** the owner chose not to buy model credits during development.
+  Gemini 3.8 Flash (`gemini-3.8-flash`) on the free tier is a second
+  provider behind the same interface, through the official `google-genai`
+  SDK and its Interactions API. The Anthropic adapter stays as an optional
+  provider. Each provider has one pinned model, selected by configuration
+  (`PATCHPILOT_PROVIDER`), never by fallback.
+- **Reason:** a real pilot at no model cost. The agent loop, tools, patch
+  policy, sandbox, traces and grading are unchanged; only the adapter
+  differs.
+- **How it is kept free and honest:** requests are stateless (`store` off);
+  SDK retries and automatic continuation are off, because both send
+  uncounted requests; Vertex AI and enterprise mode are refused; a live run
+  needs the owner's confirmation that the key's project has no billing
+  account, which code cannot check; the ledger still reserves at list price
+  so the caps bound the exposure. Results always name the provider and the
+  model, and results from different models are never pooled.
+- **Accepted cost:** on the free tier Google may use prompts and responses
+  to improve its products, so only synthetic or approved public code is
+  sent.
+- **Rejected:** a multi-provider gateway library, automatic fallback to
+  another model or provider, the legacy `generateContent` API (still
+  supported, but no longer the documented path), server-side conversation
+  state.

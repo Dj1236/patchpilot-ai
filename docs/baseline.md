@@ -105,6 +105,64 @@ it must be loaded into the environment by the person running the command.
 The key is read only by the SDK. PatchPilot never reads, prints, logs or
 stores it.
 
+## Providers
+
+`PATCHPILOT_PROVIDER` selects `anthropic` (default) or `gemini`. Each has
+one pinned model, `claude-sonnet-5-5` or `gemini-3.8-flash`; a run uses that
+model or stops. There is no fallback to another model or provider. The
+provider and both model names (requested and reported) are in every
+`record.json` and `report.md`. Results from different models are different
+experiments and are never pooled.
+
+### Gemini on the free tier
+
+The adapter uses the official `google-genai` SDK and the Interactions API.
+
+- **Stateless.** `store` is off: the provider keeps no interaction record
+  and the whole history is sent each time.
+- **No uncounted requests.** The SDK's retries (five attempts by default) and
+  its automatic continuation are off.
+- **Function tools only.** The four read-only tools. Search, code execution
+  and other server-side tools are never enabled.
+- **Thought signatures.** The model's steps, thought steps included, are
+  stored and sent back exactly as received.
+- **Structured answer.** The proposal schema is sent as a JSON response
+  format, together with the tools. The provider marks that combination as a
+  preview feature. The answer is validated in code either way.
+- **Billed modes refused.** Vertex AI and enterprise mode stop the run before
+  any request. So does `GOOGLE_API_KEY`, which the SDK would prefer over
+  `GEMINI_API_KEY`.
+- **Free tier is confirmed by the owner, not by code.** Billing belongs to
+  the key's Google project and is not visible to a request. A live run is
+  refused until `PATCHPILOT_GEMINI_FREE_TIER_CONFIRMED=1` is set.
+- **The ledger still counts.** Requests are reserved and settled at list
+  price (rounded up), so the caps bound what a run could cost if billing
+  were enabled. Reports label this amount as an upper bound, not as money
+  spent.
+- **Limits.** A per-minute limit is waited out once (60 s) before the single
+  retry. A spent daily quota ends the run as `failed_infrastructure` with
+  `quota_exhausted`; it resets at midnight Pacific time.
+- **Data use.** On the free tier Google may use prompts and responses to
+  improve its products. Send only synthetic or approved public code.
+
+The Gemini preflight calls the model-metadata and token-counting endpoints.
+The counting endpoint takes plain content, so the request is counted as one
+flattened text: the figure is an estimate, and the preflight does not prove
+the provider accepts the tools, the schema or the thinking setting. The
+first generation request is the first real check of those.
+
+Compatibility limits, all unverified until a live run:
+
+- Whether tools and a JSON response format work together on this model.
+- Token usage is reported as an upper bound: thinking tokens are added to
+  output and tool-use tokens to input, because the provider does not say
+  whether they are already included.
+- A blocked answer is recognised by words such as `safety` in the provider's
+  error. An unrecognised block is recorded as an invalid proposal, not as a
+  refusal.
+- Effort `xhigh` and `max` are not offered by this model and are refused.
+- To replay a Gemini trace, set `PATCHPILOT_PROVIDER=gemini`.
+
 ## Traces, reports and replay
 
 | File | Contents | Audience |
@@ -132,7 +190,8 @@ digest, the sandbox image and the caps.
 
 ## Model settings
 
-- `claude-sonnet-5-5`, effort `medium`, adaptive thinking.
+- `claude-sonnet-5-5`, effort `medium`, adaptive thinking; or
+  `gemini-3.8-flash`, thinking level `medium`. See "Providers".
 - No sampling settings: this model rejects non-default values, so runs are
   not deterministic. Reproducibility comes from replaying traces, and
   variation is measured by repeating runs.
@@ -158,8 +217,9 @@ digest, the sandbox image and the caps.
 
 ## Known limitations
 
-- **Unproven against the real API.** Request shapes follow the SDK and are
-  tested against its types, but no request has been sent. The token-count
+- **Unproven against the real APIs.** Request shapes follow the SDKs and are
+  tested against their types (for Gemini, through the real SDK with a local
+  transport), but no request has been sent to either provider. The token-count
   margin, the cost estimate and returning thinking blocks unchanged are all
   unverified until the pilot.
 - **`candidate_verified` can be wrong,** as described above. One test shows
