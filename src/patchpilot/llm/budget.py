@@ -53,6 +53,9 @@ PRICES: dict[str, Prices] = {
     # 2027-01-01 (1.50 and 7.50 USD), rounded up, so the ledger still bounds
     # what a run could cost if billing turned out to be enabled.
     "gemini-3.8-flash": Prices(input=2, output=8, cache_write=2, cache_read=0.15),
+    # Same published list prices as 3.8 Flash, read from the pricing page on
+    # 2026-11-13, and bounded the same way.
+    "gemini-3.6-flash": Prices(input=2, output=8, cache_write=2, cache_read=0.15),
 }
 
 

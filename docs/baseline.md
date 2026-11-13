@@ -109,12 +109,32 @@ there. PatchPilot never prints, logs or stores the key.
 
 ## Providers
 
-`PATCHPILOT_PROVIDER` selects `anthropic` (default) or `gemini`. Each has
-one pinned model, `claude-sonnet-5-5` or `gemini-3.8-flash`; a run uses that
-model or stops. There is no fallback to another model or provider. The
+`PATCHPILOT_PROVIDER` selects `anthropic` (default) or `gemini`. Anthropic
+has one approved model, `claude-sonnet-5-5`. Gemini has two:
+`gemini-3.8-flash` (the default) and `gemini-3.6-flash`, chosen with
+`PATCHPILOT_GEMINI_MODEL`. Any other name is refused at start-up, before a
+client is built.
+
+The approved list is a choice for the owner, not a fallback order. One
+process uses exactly one model: `run`, `preflight` and `probe` all take the
+selected one, the answer must name that same model, and a failure never
+moves to the other. There is no fallback to another model or provider. The
 provider and both model names (requested and reported) are in every
 `record.json` and `report.md`. Results from different models are different
 experiments and are never pooled.
+
+A model is added to the approved list only after its documentation,
+free-tier limits and list price have been checked. For `gemini-3.6-flash`
+this was done on 2026-11-13: the provider's pages list it for the
+Interactions API with function calling, structured outputs and thinking
+(levels `minimal` to `high`, default `medium`), at the same list prices as
+`gemini-3.8-flash`, and the owner's free-tier project allows 5 requests per
+minute and 20 per day, the same as for 3.8. The provider documents tools
+together with a JSON answer format for "Gemini 4 and Gemini 3 series
+models" as a preview and does not name 3.6 Flash there; that combination is
+unverified on both models until a request succeeds.
+
+To replay a trace, select the model it was recorded with.
 
 ### Gemini on the free tier
 

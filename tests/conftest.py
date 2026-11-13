@@ -21,6 +21,7 @@ def no_paid_model_calls(monkeypatch: pytest.MonkeyPatch) -> None:
         "GOOGLE_GENAI_USE_VERTEXAI",
         "GOOGLE_GENAI_USE_ENTERPRISE",
         "PATCHPILOT_PROVIDER",
+        "PATCHPILOT_GEMINI_MODEL",
         "PATCHPILOT_GEMINI_FREE_TIER_CONFIRMED",
     ):
         monkeypatch.delenv(name, raising=False)

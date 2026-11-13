@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from pydantic import ValidationError
 
 from patchpilot import __version__
 from patchpilot.agent.baseline import RunLimits
@@ -18,7 +19,7 @@ from patchpilot.intake.github import GitHubClient, GitHubError
 from patchpilot.intake.pipeline import run_intake
 from patchpilot.intake.urls import IssueUrlError
 from patchpilot.llm import gemini_probe
-from patchpilot.llm.base import PINNED_MODELS, ModelClient, ModelError
+from patchpilot.llm.base import ModelClient, ModelError
 from patchpilot.llm.budget import (
     BudgetExceededError,
     RunBudget,
@@ -73,7 +74,7 @@ def intake(
 
     Read-only: nothing is written to GitHub, no code is run and no model is called.
     """
-    settings = Settings()
+    settings = _settings()
     try:
         approved = load_allowlist(allowlist or settings.allowlist_path)
         client = GitHubClient(token=settings.github_token)
@@ -121,6 +122,17 @@ _LIVE_HELP = (
 def _refuse(message: str) -> typer.Exit:
     typer.echo(f"refused: {message}", err=True)
     return typer.Exit(code=2)
+
+
+def _settings() -> Settings:
+    """Read the settings, refusing invalid ones in one line instead of a traceback."""
+    try:
+        return Settings()
+    except ValidationError as error:
+        first = error.errors()[0]
+        name = "PATCHPILOT_" + "_".join(str(part) for part in first["loc"]).upper()
+        # The message, not the rejected value: a setting can hold a secret.
+        raise _refuse(f"{name}: {first['msg']}") from None
 
 
 def _require_free_tier(settings: Settings) -> None:
@@ -172,7 +184,7 @@ def run(
     """Run the single-attempt baseline on one task, then grade it with hidden tests."""
     if live == (replay is not None):
         raise _refuse("choose exactly one of --replay <trace> (free) or --live (paid)")
-    settings = Settings()
+    settings = _settings()
     try:
         loaded = load_task(tasks_root / task)
         model = _live_model(settings) if live else replay_model(replay)  # type: ignore[arg-type]
@@ -189,7 +201,7 @@ def run(
             ledger=ledger,
             run_cap_usd=settings.run_cap_usd,
             output_dir=directory,
-            limits=RunLimits.for_provider(settings.provider),
+            limits=RunLimits.for_provider(settings.provider, settings.selected_model),
         )
     except TraceError as error:
         typer.echo(f"failed: {error}", err=True)
@@ -217,7 +229,7 @@ def evaluate_tasks(
     """Run the baseline over every task and report counts. Paid: needs --live."""
     if not live:
         raise _refuse("an evaluation makes paid model calls; pass --live once it is authorized")
-    settings = Settings()
+    settings = _settings()
     try:
         tasks = discover_tasks(tasks_root)
     except TaskError as error:
@@ -232,7 +244,7 @@ def evaluate_tasks(
         ledger=SpendLedger(settings.runs_dir / "ledger.jsonl", settings.max_cost_usd),
         run_cap_usd=settings.run_cap_usd,
         output_dir=directory,
-        limits=RunLimits.for_provider(settings.provider),
+        limits=RunLimits.for_provider(settings.provider, settings.selected_model),
     )
     table = summary_table(summary)
     (directory / "summary.md").write_text(table)
@@ -249,7 +261,7 @@ def preflight(
     Contacts the provider with the configured credential, using only the
     model-metadata and token-counting endpoints.
     """
-    settings = Settings()
+    settings = _settings()
     try:
         loaded = load_task(tasks_root / task)
     except TaskError as error:
@@ -259,7 +271,7 @@ def preflight(
         BugDescription.from_issue(view.issue),
         source_roots=view.environment.source_roots,
         commands=view.commands,
-        limits=RunLimits.for_provider(settings.provider),
+        limits=RunLimits.for_provider(settings.provider, settings.selected_model),
     )
     ledger = SpendLedger(settings.runs_dir / "ledger.jsonl", settings.max_cost_usd)
     gemini = settings.provider == "gemini"
@@ -331,11 +343,11 @@ def probe() -> None:
     of the day's requests and is entered in the spend ledger. It is sent
     once, with no retry, no tools and no answer schema.
     """
-    settings = Settings()
+    settings = _settings()
     if settings.provider != "gemini":
         raise _refuse("the probe is for Gemini only: set PATCHPILOT_PROVIDER=gemini")
     _require_free_tier(settings)
-    model = PINNED_MODELS["gemini"]
+    model = settings.selected_model
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     run_id = f"probe-{stamp}"
     reserved = worst_case_cost(
