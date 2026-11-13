@@ -9,11 +9,17 @@ import typer
 from pydantic import ValidationError
 
 from patchpilot import __version__
-from patchpilot.agent.baseline import RunLimits
+from patchpilot.agent.baseline import RepairLimits, RunLimits
 from patchpilot.agent.prompts import BugDescription
-from patchpilot.agent.trace import TraceError, recorded_outcome, replay_model, text_digest
+from patchpilot.agent.trace import (
+    TraceError,
+    recorded_mode,
+    recorded_outcome,
+    replay_model,
+    text_digest,
+)
 from patchpilot.config import Settings
-from patchpilot.eval.harness import evaluate, run_task, summary_table
+from patchpilot.eval.harness import Mode, evaluate, run_task, summary_table
 from patchpilot.intake.allowlist import AllowlistError, RepositoryNotApprovedError, load_allowlist
 from patchpilot.intake.github import GitHubClient, GitHubError
 from patchpilot.intake.pipeline import run_intake
@@ -117,6 +123,10 @@ _LIVE_HELP = (
     "Make real model API calls, paid unless the provider's free tier applies. "
     "Needs credentials and the owner's authorization."
 )
+_MODE_HELP = (
+    "baseline: one proposal, no feedback. repair: up to PATCHPILOT_MAX_ATTEMPTS "
+    "proposals, each after feedback from the agent's own checks."
+)
 
 
 def _refuse(message: str) -> typer.Exit:
@@ -179,14 +189,18 @@ def run(
         Path | None, typer.Option(help="Replay this stored trace. Makes no model call.")
     ] = None,
     live: Annotated[bool, typer.Option("--live", help=_LIVE_HELP)] = False,
+    mode: Annotated[Mode, typer.Option(help=_MODE_HELP)] = "baseline",
     tasks_root: Annotated[Path, typer.Option(help="Folder holding the tasks.")] = TASKS_ROOT,
 ) -> None:
-    """Run the single-attempt baseline on one task, then grade it with hidden tests."""
+    """Run one mode on one task, then grade it with hidden tests."""
     if live == (replay is not None):
         raise _refuse("choose exactly one of --replay <trace> (free) or --live (paid)")
     settings = _settings()
     try:
         loaded = load_task(tasks_root / task)
+        if replay is not None:
+            # A trace is replayed in the mode it was recorded in.
+            mode = "repair" if recorded_mode(replay) == "repair" else "baseline"
         model = _live_model(settings) if live else replay_model(replay)  # type: ignore[arg-type]
     except (TaskError, TraceError) as error:
         raise _refuse(str(error)) from None
@@ -202,6 +216,8 @@ def run(
             run_cap_usd=settings.run_cap_usd,
             output_dir=directory,
             limits=RunLimits.for_provider(settings.provider, settings.selected_model),
+            mode=mode,
+            repair=RepairLimits(max_attempts=settings.max_attempts),
         )
     except TraceError as error:
         typer.echo(f"failed: {error}", err=True)
@@ -224,6 +240,7 @@ def run(
 def evaluate_tasks(
     live: Annotated[bool, typer.Option("--live", help=_LIVE_HELP)] = False,
     runs: Annotated[int, typer.Option(min=1, max=10, help="Runs per task.")] = 3,
+    mode: Annotated[Mode, typer.Option(help=_MODE_HELP)] = "baseline",
     tasks_root: Annotated[Path, typer.Option(help="Folder holding the tasks.")] = TASKS_ROOT,
 ) -> None:
     """Run the baseline over every task and report counts. Paid: needs --live."""
@@ -245,6 +262,8 @@ def evaluate_tasks(
         run_cap_usd=settings.run_cap_usd,
         output_dir=directory,
         limits=RunLimits.for_provider(settings.provider, settings.selected_model),
+        mode=mode,
+        repair=RepairLimits(max_attempts=settings.max_attempts),
     )
     table = summary_table(summary)
     (directory / "summary.md").write_text(table)

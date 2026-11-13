@@ -31,6 +31,11 @@ _FREE_TIER_NOTE = {
     )
 }
 
+_MODE_MEANING = {
+    "baseline": "single attempt, no test feedback",
+    "repair": "several proposals, with feedback from the agent's own checks",
+}
+
 _STATUS_MEANING = {
     RunStatus.CANDIDATE_VERIFIED: (
         "The regression test failed before the patch and all tests passed after it. "
@@ -76,7 +81,7 @@ def public_report(record: RunRecord, resolved: bool | None = None) -> str:
         f"# PatchPilot run {record.run_id}",
         "",
         f"- **Task:** `{record.task_id}`",
-        f"- **Mode:** {record.mode} (single attempt, no test feedback)",
+        f"- **Mode:** {record.mode} ({_MODE_MEANING.get(record.mode, '')})",
         f"- **Status:** `{record.status.value}`. {_STATUS_MEANING[record.status]}",
         f"- **Detail:** {html.escape(record.detail[:500], quote=False)}",
     ]
@@ -99,6 +104,21 @@ def public_report(record: RunRecord, resolved: bool | None = None) -> str:
         f"- **Duration:** {record.duration_seconds:.1f} s",
         "",
     ]
+    if record.attempts:
+        limit = manifest.repair.max_attempts if manifest.repair else len(record.attempts)
+        lines += [
+            "## Proposals",
+            "",
+            f"{len(record.attempts)} of at most {limit}. Each was applied to the original "
+            "code. The sections below describe the last one.",
+            "",
+            "| Proposal | Outcome | Detail |",
+            "|---|---|---|",
+        ]
+        for number, attempt in enumerate(record.attempts, start=1):
+            detail = html.escape(attempt.detail[:200], quote=False).replace("|", "\\|")
+            lines.append(f"| {number} | `{attempt.status.value}` | {detail} |")
+        lines.append("")
     if record.verification is not None:
         lines += [
             "## Verification evidence",

@@ -7,9 +7,17 @@ and its record is final; nothing from grading is ever passed back to a model.
 
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any, Literal
 
-from patchpilot.agent.baseline import RunLimits, RunRecord, RunStatus, run_baseline
+from patchpilot.agent.baseline import (
+    RepairLimits,
+    RunLimits,
+    RunRecord,
+    RunStatus,
+    run_baseline,
+)
 from patchpilot.agent.prompts import BugDescription
+from patchpilot.agent.repair import run_repair
 from patchpilot.agent.report import write_run
 from patchpilot.agent.trace import TraceWriter, secrets_from_environment
 from patchpilot.llm.base import ModelClient
@@ -19,6 +27,7 @@ from patchpilot.tasks.evaluate import grade_candidate
 from patchpilot.tasks.loader import LoadedTask
 
 ModelFactory = Callable[[LoadedTask, int], ModelClient]
+Mode = Literal["baseline", "repair"]
 
 
 class TaskRun(FrozenModel):
@@ -66,28 +75,34 @@ def run_task(
     run_cap_usd: float,
     output_dir: Path,
     limits: RunLimits | None = None,
+    mode: Mode = "baseline",
+    repair: RepairLimits | None = None,
 ) -> TaskRun:
-    """Run the baseline once on a task, then grade the result with hidden tests."""
+    """Run one mode once on a task, then grade the result with hidden tests."""
     view = loaded.task.agent_view()
     files = loaded.agent_files()
     run_id = f"{view.task_id}-{run_index}"
     directory = output_dir / run_id
     secrets = secrets_from_environment()
-    record, patched = run_baseline(
-        task_id=view.task_id,
-        bug=BugDescription.from_issue(view.issue),
-        files=files,
-        source_roots=view.environment.source_roots,
-        commands=view.commands,
-        sandbox_limits=view.budgets,
-        model=model,
-        sandbox=sandbox,
-        budget=RunBudget(ledger, run_id, run_cap_usd),
-        trace=TraceWriter(directory, secrets),
-        limits=limits,
-        run_cap_usd=run_cap_usd,
-        run_id=run_id,
-    )
+    common: dict[str, Any] = {
+        "task_id": view.task_id,
+        "bug": BugDescription.from_issue(view.issue),
+        "files": files,
+        "source_roots": view.environment.source_roots,
+        "commands": view.commands,
+        "sandbox_limits": view.budgets,
+        "model": model,
+        "sandbox": sandbox,
+        "budget": RunBudget(ledger, run_id, run_cap_usd),
+        "trace": TraceWriter(directory, secrets),
+        "limits": limits,
+        "run_cap_usd": run_cap_usd,
+        "run_id": run_id,
+    }
+    if mode == "repair":
+        record, patched = run_repair(**common, repair=repair)
+    else:
+        record, patched = run_baseline(**common)
 
     # The run is over and its record is final. Only now are hidden tests used.
     resolved = False
@@ -124,6 +139,8 @@ def evaluate(
     run_cap_usd: float,
     output_dir: Path,
     limits: RunLimits | None = None,
+    mode: Mode = "baseline",
+    repair: RepairLimits | None = None,
 ) -> EvalSummary:
     runs = [
         run_task(
@@ -135,11 +152,59 @@ def evaluate(
             run_cap_usd=run_cap_usd,
             output_dir=output_dir,
             limits=limits,
+            mode=mode,
+            repair=repair,
         )
         for loaded in tasks
         for index in range(1, runs_per_task + 1)
     ]
-    return EvalSummary(mode="baseline", runs=tuple(runs))
+    return EvalSummary(mode=mode, runs=tuple(runs))
+
+
+def proposals(record: RunRecord) -> int:
+    """Return how many proposals a run made."""
+    if record.mode == "repair":
+        return len(record.attempts)
+    return 1 if record.proposal is not None else 0
+
+
+def comparison_table(baseline: EvalSummary, repair: EvalSummary) -> str:
+    """Set the two modes side by side, task by task. Counts, not percentages."""
+    lines = [
+        "# Baseline against repair loop",
+        "",
+        "Same tasks, tools, patch rules, sandbox and hidden-test grading. The repair "
+        "loop differs in one thing: after a proposal that is not accepted, the model "
+        "is told why and may propose again.",
+        "",
+        "| Task | Mode | Runs | Verified by the agent | Resolved (hidden tests) | Proposals "
+        "| Turns | Cost |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    tasks = sorted({run.task_id for run in (*baseline.runs, *repair.runs)})
+    for task in tasks:
+        for summary in (baseline, repair):
+            runs = [run for run in summary.runs if run.task_id == task]
+            if not runs:
+                continue
+            verified = sum(run.record.status is RunStatus.CANDIDATE_VERIFIED for run in runs)
+            lines.append(
+                f"| {task} | {summary.mode} | {len(runs)} | {verified} "
+                f"| {sum(run.resolved for run in runs)} "
+                f"| {sum(proposals(run.record) for run in runs)} "
+                f"| {sum(run.record.model_turns for run in runs)} "
+                f"| ${usd(sum(run.record.cost_micro_usd for run in runs)):.4f} |"
+            )
+    lines += [""]
+    for summary in (baseline, repair):
+        lines.append(
+            f"- {summary.mode}: {summary.resolved} of {len(summary.runs)} resolved by hidden "
+            f"tests, {summary.count(RunStatus.CANDIDATE_VERIFIED)} verified by the agent, "
+            f"{summary.verified_but_not_resolved} verified but not resolved, "
+            f"total cost ${usd(summary.cost_micro_usd):.4f}"
+        )
+    lines.append("")
+    return "\n".join(lines)
 
 
 def summary_table(summary: EvalSummary) -> str:
@@ -157,9 +222,9 @@ def summary_table(summary: EvalSummary) -> str:
         f"{total} runs. Results are counts; with this few tasks they show whether the "
         "pipeline works and what it costs, not how good it is.",
         "",
-        "| Task | Run | Status | Resolved (hidden tests) | Right file edited | Turns | Tool calls "
-        "| Cost |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Task | Run | Status | Resolved (hidden tests) | Right file edited | Proposals | Turns "
+        "| Tool calls | Cost |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for run in summary.runs:
         record = run.record
@@ -167,7 +232,8 @@ def summary_table(summary: EvalSummary) -> str:
         located = {True: "yes", False: "no", None: "n/a"}[run.localization_hit]
         lines.append(
             f"| {run.task_id} | {run.run_index} | {record.status.value} | {resolved} | {located} "
-            f"| {record.model_turns} | {record.tool_calls} | ${usd(record.cost_micro_usd):.4f} |"
+            f"| {proposals(record)} | {record.model_turns} | {record.tool_calls} "
+            f"| ${usd(record.cost_micro_usd):.4f} |"
         )
     lines += [
         "",
