@@ -269,6 +269,23 @@ def test_the_command_fails_cleanly_without_credentials_or_with_a_bad_one(
         assert SECRET not in result.output and "Traceback" not in result.output
 
 
+def test_the_command_fails_cleanly_when_the_ledger_is_unreadable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = FakeClient()
+    monkeypatch.setattr(cli, "connect", lambda: client)
+    monkeypatch.setenv("PATCHPILOT_RUNS_DIR", str(tmp_path))
+    (tmp_path / "ledger.jsonl").write_text("not json\n")
+
+    result = runner.invoke(cli.app, ["preflight", "--task", "inj-001-cachekit"])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit), "the command crashed instead of exiting"
+    assert "preflight failed (ledger_unreadable)" in result.output
+    assert "refusing to spend" in result.output and "Traceback" not in result.output
+    assert client.calls == [], "the provider was contacted"
+
+
 def test_the_command_refuses_an_unknown_task_before_contacting_anything(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
