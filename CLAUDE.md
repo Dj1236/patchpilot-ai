@@ -10,10 +10,11 @@ Milestones 2 to 4 and the Milestone 5 baseline agent (steps 1 to 11) are
 merged and verified locally, and so is the free `patchpilot preflight`
 command. The owner will not buy model credits during development: the pilot
 uses free-tier Gemini (`PATCHPILOT_PROVIDER=gemini`, `gemini-3.8-flash`),
-tested offline only; the Anthropic adapter stays as an optional provider. No
-live model call has been made, and the preflight has not been run with a
-credential. The next step is the one-run live pilot in `docs/pilot-plan.md`:
-it is planned but not authorized, and each live run needs its own go-ahead.
+the Anthropic adapter stays as an optional provider. Two live pilot runs and
+one minimal probe were made on 2026-11-13; all five generation requests got
+HTTP 503 from the provider, so there is still no model output and no graded
+result. See "Outcome so far" in `docs/pilot-plan.md`. Each further live
+request needs its own go-ahead. Keep `runs/` and its ledger as they are.
 PatchPilot does not load `.env`; the key comes from the process environment.
 Milestone 6 is not started and waits for measured live results. GitHub Actions cannot start on this account, so no CI gate
 has passed; see `docs/ci-status.md` and never describe CI as green. Each

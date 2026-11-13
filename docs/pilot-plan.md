@@ -1,7 +1,46 @@
 # Milestone 5, step 12: live model pilot plan
 
-Status: **planned, not authorized, not run.** No live model call has been
-made, paid or free. Each live run needs the owner's explicit go-ahead for that run.
+Status: **attempted twice, no model output yet.** Every generation request so
+far was answered with HTTP 503 by the provider; see "Outcome so far". Each
+further live request needs the owner's explicit go-ahead.
+
+## Outcome so far (2026-11-13)
+
+All requests used free-tier `gemini-3.8-flash` through `/v1/interactions`.
+
+| Time (UTC) | What | Generation attempts | Result |
+|---|---|---|---|
+| 09:13 | Agent run 1 on `inj-001-cachekit` | 2 | HTTP 503 `service_unavailable` twice, after 1.5 s and 1.0 s |
+| 09:42 | Agent run 2 on `inj-001-cachekit` | 2 | HTTP 503 `service_unavailable` twice, after 7.2 s and 47.5 s, with a 30 s wait between |
+| 12:55 | Minimal probe: text only, no tools, no schema | 1 | HTTP 503 `service_unavailable` after 2.9 s |
+
+- No model turn, tool call, patch or grading has happened. Nothing about
+  quality, tools with a JSON schema, thought signatures or token usage has
+  been measured. `resolved` is unset, not false.
+- Token counting and the model-metadata check worked each time.
+- Records: `runs/20261113T091340851217Z/`, `runs/20261113T094252729212Z/`
+  and `runs/probes/20261113T125556644896Z/`. They are kept, with the ledger,
+  as the history of the pilot.
+- Ledger: 0.5301 USD committed of the 5.00 USD cap, all of it reservations
+  charged for failed requests. This is internal accounting, not a bill.
+
+Confirmed: all five generation requests were answered with HTTP 503
+`service_unavailable`. The 503 does not need PatchPilot's request shape to
+occur: the probe sent the simplest request the API accepts and failed the
+same way. The agent runs sent one identical request, and a comparison with
+the provider's documentation found no unsupported field in it.
+
+Not confirmed: why the provider answered 503. Provider overload is a
+hypothesis. It fits the provider's documentation, which describes this code
+as overload or outage, and reports from other free-tier users of this model,
+but five failures within four hours on one project do not prove it. It is
+also unknown whether the agent's request would be accepted, since no request
+has succeeded, and whether another model or another time of day would
+behave differently.
+
+The safeguards worked as designed: one bounded retry per request, a 30 s
+wait after a 503 in run 2, no other model tried, every request reserved
+first, and all records written.
 
 ## Decided
 

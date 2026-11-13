@@ -102,8 +102,10 @@ removed. Prompt contents are never printed.
 or a file outside the repository. Acceptable: a git-ignored `.env` in the
 repository with permissions `600`; PatchPilot does not load it by itself, so
 it must be loaded into the environment by the person running the command.
-The key is read only by the SDK. PatchPilot never reads, prints, logs or
-stores it.
+The SDK reads the key from the environment and sends it to the provider to
+authenticate each request. PatchPilot's own code reads the key's value for
+one purpose only: to remove it from traces and reports if it ever appears
+there. PatchPilot never prints, logs or stores the key.
 
 ## Providers
 
@@ -269,8 +271,9 @@ digest, the sandbox image and the caps.
 - All generated code and tests run only in the sandbox.
 - Every test runs with model credentials removed and the SDK pointed at an
   unused local address, so no test can reach the provider.
-- The API key is read by the SDK from the environment. PatchPilot never
-  reads, stores or logs it, and redacts it from traces if it ever appears.
+- The API key is read by the SDK from the environment, for authentication.
+  PatchPilot reads its value only to redact it from traces and reports, and
+  never prints, stores or logs it.
 - Labeling untrusted text in prompts is an aid to the model, not a control.
 
 ## Known limitations
