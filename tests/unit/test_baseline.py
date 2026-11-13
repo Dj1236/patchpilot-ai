@@ -14,12 +14,22 @@ import pytest
 
 from patchpilot.agent.baseline import RunLimits, RunRecord, RunStatus, run_baseline
 from patchpilot.agent.prompts import BugDescription, prompt_hash
-from patchpilot.agent.trace import TraceError, TraceWriter, read_trace, replay_model
+from patchpilot.agent.report import RECORD_FILE, REPORT_FILE, write_run
+from patchpilot.agent.trace import (
+    TraceError,
+    TraceWriter,
+    read_trace,
+    recorded_outcome,
+    replay_model,
+    text_digest,
+)
 from patchpilot.intake.text import UntrustedText
 from patchpilot.llm.base import ModelError, ModelTurn, Usage
 from patchpilot.llm.budget import RunBudget, SpendLedger, prices_for, worst_case_cost
 from patchpilot.llm.fake import Scripted, ScriptedModel, final_turn, tool_turn
 from patchpilot.sandbox.models import (
+    CaseOutcome,
+    CaseResult,
     Counts,
     PytestCommand,
     SandboxLimits,
@@ -67,6 +77,9 @@ class ScriptedSandbox:
     def __init__(self, statuses: Sequence[SandboxStatus]) -> None:
         self._statuses = list(statuses)
         self.runs: list[tuple[dict[str, bytes], PytestCommand]] = []
+        # Outcome reported for the regression test in a given run, overriding
+        # the one implied by that run's status.
+        self.case_overrides: dict[int, CaseOutcome] = {}
 
     def run(
         self,
@@ -79,12 +92,28 @@ class ScriptedSandbox:
         status = self._statuses[len(self.runs)]
         self.runs.append((dict(files), command))
         failed = 1 if status is F else 0
+        implied = {P: CaseOutcome.PASSED, F: CaseOutcome.FAILED}.get(status)
+        outcome = self.case_overrides.get(len(self.runs) - 1, implied)
+        cases = (
+            (
+                CaseResult(
+                    node_id="tests/test_total.py::test_total",
+                    classname="tests.test_total",
+                    name="test_total",
+                    outcome=outcome,
+                    duration_seconds=0.0,
+                ),
+            )
+            if outcome is not None
+            else ()
+        )
         return SandboxResult(
             status=status,
             command=command,
             container_argv=(),
             exit_code={P: 0, F: 1}.get(status),
             counts=Counts(total=2, passed=2 - failed, failed=failed, errors=0, skipped=0),
+            cases=cases,
             started_at=datetime.now(UTC),
             duration_seconds=0.1,
         )
@@ -391,11 +420,8 @@ def test_a_trace_replays_to_the_same_result_without_a_model(harness: Harness) ->
     original, _, _, trace = harness.run([*EXPLORE, final_turn(proposal())])
     events = read_trace(trace)
     assert [event["type"] for event in events][:3] == ["start", "request", "response"]
-    assert events[-1] == {
-        "type": "finish",
-        "status": "candidate_verified",
-        "detail": original.detail,
-    }
+    assert events[-1]["type"] == "finish" and events[-1]["status"] == "candidate_verified"
+    assert events[-1]["detail"] == original.detail
 
     replayed, model, _, _ = harness.run([], model=replay_model(trace))
 
@@ -431,3 +457,168 @@ def test_failed_requests_are_replayed_as_failures(harness: Harness) -> None:
 
     assert replayed.status is original.status is RunStatus.CANDIDATE_VERIFIED
     assert replayed.cost_micro_usd == original.cost_micro_usd
+
+
+# -- review follow-ups: verification, traces, reports, budget, live-call guards ---------
+
+
+def _verify_with(harness: Harness, overrides: dict[int, CaseOutcome]) -> RunRecord:
+    box = ScriptedSandbox(GOOD_SANDBOX)
+    box.case_overrides = overrides
+    record, _ = run_baseline(
+        task_id="demo",
+        bug=BUG,
+        files=FILES,
+        source_roots=("src",),
+        commands=COMMANDS,
+        sandbox_limits=SandboxLimits(),
+        model=ScriptedModel([final_turn(proposal())]),
+        sandbox=box,
+        budget=RunBudget(harness.ledger, "verify", 0.75),
+        trace=TraceWriter(harness.tmp_path / "verify"),
+    )
+    return record
+
+
+@pytest.mark.parametrize("after", [CaseOutcome.SKIPPED, CaseOutcome.ERROR])
+def test_the_test_that_failed_before_must_itself_pass_after(
+    harness: Harness, after: CaseOutcome
+) -> None:
+    # The run after the patch exits successfully, but the test that failed
+    # before was skipped: that proves nothing about the fix.
+    record = _verify_with(harness, {1: after})
+
+    assert record.status is RunStatus.UNVERIFIED
+    assert "did not pass after" in record.detail
+
+
+def test_a_failing_run_that_names_no_failing_test_is_not_evidence(harness: Harness) -> None:
+    record = _verify_with(harness, {0: CaseOutcome.PASSED})
+
+    assert record.status is RunStatus.UNVERIFIED
+    assert "no individual test" in record.detail
+
+
+def test_replay_needs_no_network_at_all(harness: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
+    import socket
+
+    _, _, _, trace = harness.run([*EXPLORE, final_turn(proposal())])
+
+    def no_network(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the replay tried to open a network connection")
+
+    monkeypatch.setattr(socket, "socket", no_network)
+    monkeypatch.setattr(socket, "create_connection", no_network)
+    replayed, model, _, _ = harness.run([], model=replay_model(trace))
+
+    assert replayed.status is RunStatus.CANDIDATE_VERIFIED and len(model.requests) == 3
+
+
+def test_the_trace_records_the_outcome_a_replay_must_reproduce(harness: Harness) -> None:
+    record, _, _, trace = harness.run([final_turn(proposal())])
+
+    assert recorded_outcome(trace) == ("candidate_verified", text_digest(record.diff))
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        lambda text: text[: len(text) // 2],
+        lambda text: "this is not json\n",
+        lambda text: "[1, 2, 3]\n{}\n",
+        lambda text: text.replace('"type": "response"', '"type": "response", "turn": 5, "x"', 1),
+        lambda text: "\n".join(
+            line for line in text.splitlines() if '"type": "request"' not in line
+        ),
+    ],
+)
+def test_a_damaged_trace_is_refused_instead_of_crashing(harness: Harness, damage: Any) -> None:
+    _, _, _, trace = harness.run([*EXPLORE, final_turn(proposal())])
+    trace.write_text(damage(trace.read_text()))
+
+    with pytest.raises(TraceError):
+        harness.run([], model=replay_model(trace))
+
+
+def test_a_trace_missing_its_last_response_stops_the_replay_safely(harness: Harness) -> None:
+    _, _, _, trace = harness.run([*EXPLORE, final_turn(proposal())])
+    lines = trace.read_text().splitlines()
+    last_response = max(i for i, line in enumerate(lines) if '"type": "response"' in line)
+    trace.write_text("\n".join(lines[:last_response] + lines[last_response + 1 :]) + "\n")
+
+    with pytest.raises(TraceError, match="incomplete"):
+        harness.run([], model=replay_model(trace))
+
+
+def test_a_tampered_final_answer_no_longer_matches_the_recorded_outcome(harness: Harness) -> None:
+    _, _, _, trace = harness.run([final_turn(proposal())])
+    expected = recorded_outcome(trace)
+    trace.write_text(trace.read_text().replace("return sum(items)", "return 0  # tampered"))
+
+    replayed, _, _, _ = harness.run([], model=replay_model(trace))
+
+    assert expected is not None
+    assert (replayed.status.value, text_digest(replayed.diff)) != expected
+
+
+def test_records_and_reports_hold_no_secrets_prompts_or_thinking(harness: Harness) -> None:
+    secret = "patchpilot-report-canary-not-a-real-key"
+    thought = "PRIVATE-CHAIN-OF-THOUGHT-MARKER"
+    leaking = proposal(summary=f"Fixed. The key is {secret}", root_cause=f"token={secret}")
+    thinking = {"type": "thinking", "thinking": thought, "signature": "sig"}
+    final = final_turn(leaking)
+    final = final.model_copy(update={"content": (thinking, *final.content)})
+
+    record, _, _, trace = harness.run([final], secrets=[secret])
+    write_run(record, trace.parent, resolved=False, secrets=[secret])
+    report = (trace.parent / REPORT_FILE).read_text()
+    stored = (trace.parent / RECORD_FILE).read_text()
+
+    assert record.proposal is not None
+    assert secret in record.proposal.summary, "the secret must really be in play"
+    for artifact in (report, stored, trace.read_text()):
+        assert secret not in artifact
+    for public in (report, stored):
+        assert thought not in public
+        assert "You are the patch author" not in public and "untrusted_issue" not in public
+        assert INJECTION not in public
+    assert thought in trace.read_text(), "the private trace keeps blocks exactly as received"
+    assert "[redacted]" in report and "not resolved" in report
+
+
+def test_an_unreadable_ledger_refuses_to_spend(tmp_path: Path) -> None:
+    harness = Harness(tmp_path)
+    (tmp_path / "ledger.jsonl").write_text(
+        '{"type": "reserve", "id": "a", "micro_usd": 5}\ngarbage\n'
+    )
+
+    record, model, _, _ = harness.run([final_turn(proposal())])
+
+    assert record.status is RunStatus.BUDGET_EXCEEDED and "unreadable" in record.detail
+    assert model.requests == []
+
+
+def test_a_different_model_answering_is_visible_not_silent(harness: Harness) -> None:
+    other = final_turn(proposal()).model_copy(update={"model": "some-other-model"})
+
+    record, _, _, trace = harness.run([other])
+    write_run(record, trace.parent)
+
+    assert record.manifest.model_requested == "claude-sonnet-5-5"
+    assert record.manifest.models_reported == ("some-other-model",)
+    assert "reported: `some-other-model`" in (trace.parent / REPORT_FILE).read_text()
+
+
+def test_tests_cannot_reach_the_model_provider() -> None:
+    import os
+
+    from patchpilot.llm.anthropic_client import AnthropicModel
+
+    assert "ANTHROPIC_API_KEY" not in os.environ and "ANTHROPIC_AUTH_TOKEN" not in os.environ
+    assert os.environ["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:9"
+    os.environ["ANTHROPIC_API_KEY"] = "placeholder-for-client-construction"
+    try:
+        client = AnthropicModel()._client
+    finally:
+        del os.environ["ANTHROPIC_API_KEY"]
+    assert str(client.base_url).startswith("http://127.0.0.1:9")

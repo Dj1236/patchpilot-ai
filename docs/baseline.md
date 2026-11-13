@@ -25,7 +25,7 @@ SDK. The first real calls are a separate, authorized step.
 
 | Status | Meaning |
 |---|---|
-| `candidate_verified` | The new regression test failed before the patch, and it and the existing tests passed after |
+| `candidate_verified` | A new regression test failed before the patch, that same test passed after it, and the existing tests passed |
 | `unverified` | The patch applied, but one of those three checks did not hold, or a test run hit a limit |
 | `invalid_proposal` | The answer was cut off, was not valid, or an edit's target was missing or ambiguous |
 | `rejected_policy` | The patch broke a patch rule. It is never run |
@@ -66,7 +66,7 @@ Every model request goes through reserve, send, settle.
   own retries are off.
 - **The ledger persists.** It is an append-only file under `runs/`, locked
   across processes, so the total cap holds between invocations and under
-  concurrent runs. A reservation left open by a crash keeps counting in full.
+  concurrent runs. If the ledger cannot be read, nothing is sent. A reservation left open by a crash keeps counting in full.
 
 Prices are pinned in `llm/budget.py` with the date they were read. A model
 with no pinned price cannot be called.
@@ -77,15 +77,20 @@ with no pinned price cannot be called.
 |---|---|---|
 | `trace.jsonl` | Every request and response, including thinking blocks and file contents | Local only. Owner-readable, under the ignored `runs/` folder, known secrets redacted |
 | `record.json` | Status, evidence, usage, cost, diff, manifest | Local |
-| `report.md` | Sanitized summary: status, evidence, diff, cost, manifest | Safe to share |
+| `report.md` | Sanitized summary: status, evidence, diff, cost, manifest | Shareable for public repositories. It contains the diff, so it shows the repository lines around the change |
 
-The report never contains prompts, thinking or the trace. Text the model
+The report and the record never contain prompts, thinking or the trace, and
+known secret values are removed from them as they are from the trace. Text the model
 wrote and the diff are bounded, cleaned and rendered so they cannot break
 out of their place in the document.
 
 `patchpilot run --task <id> --replay <trace>` re-runs a recorded run with no
 model call. If the replayed run would send a different request than the one
-recorded, it stops instead of pairing an old answer with a new question.
+recorded, it stops instead of pairing an old answer with a new question. A
+trace that is damaged or incomplete is refused, and the command fails if the
+replayed status or diff differs from the outcome the trace recorded. That
+check catches damage and drift. It is not protection against someone who
+edits a trace deliberately, since the recorded outcome sits in the same file.
 
 The manifest records the model requested and the model the API reported,
 the effort, hashes of the prompts and the configuration, the repository
@@ -111,6 +116,8 @@ digest, the sandbox image and the caps.
 - Hidden tests and reference fixes are never in the agent's files, and a
   test checks nothing given to the model contains them.
 - All generated code and tests run only in the sandbox.
+- Every test runs with model credentials removed and the SDK pointed at an
+  unused local address, so no test can reach the provider.
 - The API key is read by the SDK from the environment. PatchPilot never
   reads, stores or logs it, and redacts it from traces if it ever appears.
 - Labeling untrusted text in prompts is an aid to the model, not a control.
@@ -127,7 +134,8 @@ digest, the sandbox image and the caps.
   [grading-integrity.md](grading-integrity.md).
 - **The reservation is conservative,** so a run can stop for budget while
   real spend is well under its cap.
-- **Trace redaction covers known secret values only.** Traces hold
+- **Redaction covers known secret values only,** in traces, records and
+  reports alike. Traces hold
   repository content and must stay local.
 - **Only evaluation tasks can be run from the command line.** Running from
   a GitHub issue URL is wired up to the intake pipeline but has no command
