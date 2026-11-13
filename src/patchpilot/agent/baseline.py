@@ -34,6 +34,7 @@ from patchpilot.agent.proposal import PROPOSAL_SCHEMA, PatchProposal, ProposalEr
 from patchpilot.agent.trace import TraceWriter
 from patchpilot.agent.verify import Verification, verify_patch
 from patchpilot.llm.base import (
+    APPROVED_MODELS,
     PINNED_MODELS,
     ModelClient,
     ModelError,
@@ -79,17 +80,18 @@ class RunLimits(FrozenModel):
     policy: PolicyLimits = PolicyLimits()
 
     @model_validator(mode="after")
-    def _only_the_pinned_model(self) -> "RunLimits":
-        if self.model != PINNED_MODELS[self.provider]:
+    def _only_an_approved_model(self) -> "RunLimits":
+        if self.model not in APPROVED_MODELS[self.provider]:
             raise ValueError(
-                f"provider {self.provider!r} runs only {PINNED_MODELS[self.provider]!r}, "
+                f"provider {self.provider!r} runs only {list(APPROVED_MODELS[self.provider])}, "
                 f"not {self.model!r}"
             )
         return self
 
     @classmethod
-    def for_provider(cls, provider: Provider) -> "RunLimits":
-        return cls(provider=provider, model=PINNED_MODELS[provider])
+    def for_provider(cls, provider: Provider, model: str | None = None) -> "RunLimits":
+        """Return the limits for one provider and one of its approved models."""
+        return cls(provider=provider, model=model or PINNED_MODELS[provider])
 
     def digest(self) -> str:
         return hashlib.sha256(self.model_dump_json().encode()).hexdigest()

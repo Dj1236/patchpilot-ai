@@ -10,7 +10,7 @@ from pathlib import Path
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from patchpilot.llm.base import Provider
+from patchpilot.llm.base import APPROVED_MODELS, PINNED_MODELS, Provider
 
 
 class Settings(BaseSettings):
@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     provider: Provider = Field(
         default="anthropic",
         description="Model provider. Each provider has exactly one pinned model.",
+    )
+    gemini_model: str = Field(
+        default=PINNED_MODELS["gemini"],
+        description="Which approved Gemini model to use. Chosen by the owner, never by fallback.",
     )
     gemini_free_tier_confirmed: bool = Field(
         default=False,
@@ -50,6 +54,20 @@ class Settings(BaseSettings):
         default=None,
         description="Optional read-only token, sent to api.github.com only. Never to git.",
     )
+
+    @field_validator("gemini_model")
+    @classmethod
+    def _approved_gemini_model(cls, value: str) -> str:
+        if value not in APPROVED_MODELS["gemini"]:
+            raise ValueError(
+                f"not an approved Gemini model; choose one of {list(APPROVED_MODELS['gemini'])}"
+            )
+        return value
+
+    @property
+    def selected_model(self) -> str:
+        """The one model this process may use for the configured provider."""
+        return self.gemini_model if self.provider == "gemini" else PINNED_MODELS[self.provider]
 
     @field_validator("github_token", "allowlist_path", mode="before")
     @classmethod

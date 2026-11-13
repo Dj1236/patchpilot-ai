@@ -67,8 +67,11 @@ uv run patchpilot probe                   # one real Gemini generation request: 
   use the scripted fake model or a local transport. Never pass `--live`, set
   an API key or construct `AnthropicModel()` or `GeminiModel()` for a real
   request without the owner's go-ahead for that specific run.
-- **No fallback to another model or provider.** One pinned model per
-  provider. Gemini runs only on the free tier: never enable Vertex AI,
+- **No fallback to another model or provider.** One model per process, taken
+  from the approved list in `llm/base.py`; the owner selects a Gemini model
+  with `PATCHPILOT_GEMINI_MODEL`. Add a model to that list only after its
+  documentation, free-tier limits and price are checked, and never switch
+  model after a failure. Gemini runs only on the free tier: never enable Vertex AI,
   enterprise mode or a billed key, and never set
   `PATCHPILOT_GEMINI_FREE_TIER_CONFIRMED` yourself; that is the owner's
   statement.

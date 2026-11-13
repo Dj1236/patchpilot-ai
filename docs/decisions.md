@@ -139,6 +139,11 @@ Each record states the decision, the reason, and what was rejected.
 - **Accepted cost:** on the free tier Google may use prompts and responses
   to improve its products, so only synthetic or approved public code is
   sent.
+- **Amended 2026-11-13:** after five HTTP 503 answers from
+  `gemini-3.8-flash`, `gemini-3.6-flash` was added as a second approved
+  Gemini model. The owner selects one with `PATCHPILOT_GEMINI_MODEL`; the
+  default is unchanged. The list is never used as a fallback order, and
+  results from the two models are separate experiments.
 - **Rejected:** a multi-provider gateway library, automatic fallback to
   another model or provider, the legacy `generateContent` API (still
   supported, but no longer the documented path), server-side conversation

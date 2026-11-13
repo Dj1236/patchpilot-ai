@@ -66,7 +66,7 @@ No decision is open. Each live run still needs its own go-ahead.
 
 | Setting | Value |
 |---|---|
-| Provider and model | `gemini`, `gemini-3.8-flash`, free tier. No fallback |
+| Provider and model | `gemini`, free tier. `gemini-3.8-flash` by default, or `gemini-3.6-flash` when the owner sets `PATCHPILOT_GEMINI_MODEL`. One model per process, no fallback |
 | Effort | thinking level `medium` |
 | Output limit | 16,000 tokens per request |
 | Limits per run | 8 generation attempts in all, retries included; 60 tool calls |

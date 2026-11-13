@@ -26,11 +26,19 @@ ErrorKind = Literal[
 ]
 Provider = Literal["anthropic", "gemini"]
 
-# One pinned model per provider. There is no fallback list: a run uses this
-# model or it stops.
+# The default model of each provider.
 PINNED_MODELS: dict[Provider, str] = {
     "anthropic": "claude-sonnet-5-5",
     "gemini": "gemini-3.8-flash",
+}
+
+# The only models a run may use. This is a list to choose from, not a
+# fallback order: the owner selects one model, and a run uses that model or
+# it stops. A model is added here only after its documentation, free-tier
+# limits and price have been checked.
+APPROVED_MODELS: dict[Provider, tuple[str, ...]] = {
+    "anthropic": ("claude-sonnet-5-5",),
+    "gemini": ("gemini-3.8-flash", "gemini-3.6-flash"),
 }
 
 
