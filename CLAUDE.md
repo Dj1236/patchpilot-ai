@@ -15,10 +15,10 @@ one minimal probe were made on 2026-11-13; all five generation requests got
 HTTP 503 from the provider, so there is still no model output and no graded
 result. See "Outcome so far" in `docs/pilot-plan.md`. Each further live
 request needs its own go-ahead. Keep `runs/` and its ledger as they are.
-Milestone 6 was started offline with the owner's authorization: the repair
-loop (`--mode repair`, `docs/repair-loop.md`) is built and verified with
-scripted models only. Checkpointing and resume through LangGraph are not
-built; adding that dependency needs the owner's decision.
+Milestone 6 is built offline with the owner's authorization: the repair
+loop (`--mode repair`), JSON checkpoints and `patchpilot resume` are
+verified with scripted models only (`docs/repair-loop.md`). LangGraph was
+not adopted (decision 15). The live comparison is still open.
 PatchPilot does not load `.env`; the key comes from the process environment.
 Milestone 6 is not started and waits for measured live results. GitHub Actions cannot start on this account, so no CI gate
 has passed; see `docs/ci-status.md` and never describe CI as green. Each
@@ -38,6 +38,7 @@ uv run pre-commit run --all-files
 uv run patchpilot version
 uv run patchpilot preflight --task <id>   # free, but contacts the API: needs a go-ahead
 uv run patchpilot probe                   # one real Gemini generation request: needs a go-ahead
+uv run patchpilot resume <run dir> --replay <trace>   # continue a stopped repair run, offline
 ```
 
 ## Layout
@@ -52,7 +53,7 @@ uv run patchpilot probe                   # one real Gemini generation request: 
 - `src/patchpilot/llm/`: provider interface, scripted fake model, spend
   ledger, Anthropic client, Gemini client, preflight.
 - `src/patchpilot/agent/`: prompts, proposal format, baseline pipeline,
-  repair loop,
+  repair loop, checkpoints,
   sandbox verification, traces, reports.
 - `src/patchpilot/patch/`: safe edit application, diff, patch policy.
 - `src/patchpilot/eval/`: evaluation harness.
@@ -109,6 +110,9 @@ uv run patchpilot probe                   # one real Gemini generation request: 
   repair run the model may be told about its proposal's errors, the patch
   rules and tests it can see. Never pass anything from grading or hidden
   tests back into a run.
+- **Never repeat a model request whose outcome is unknown.** A resume is
+  refused when the ledger shows work after the checkpoint. Do not weaken
+  that check, and do not edit or reset the ledger to get past it.
 - **Grade only through `grade_candidate`.** It rebuilds the tree from pinned
   tests; never run hidden tests on a tree the candidate assembled.
 - **Never weaken a sandbox restriction to make a test pass.** Security tests

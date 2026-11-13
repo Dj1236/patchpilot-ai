@@ -16,10 +16,11 @@ from patchpilot.agent.baseline import (
     RunStatus,
     run_baseline,
 )
+from patchpilot.agent.checkpoint import CheckpointError, load_checkpoint
 from patchpilot.agent.prompts import BugDescription
-from patchpilot.agent.repair import run_repair
+from patchpilot.agent.repair import resume_repair, run_repair
 from patchpilot.agent.report import write_run
-from patchpilot.agent.trace import TraceWriter, secrets_from_environment
+from patchpilot.agent.trace import TRACE_FILE, TraceWriter, read_trace, secrets_from_environment
 from patchpilot.llm.base import ModelClient
 from patchpilot.llm.budget import RunBudget, SpendLedger, usd
 from patchpilot.sandbox.models import FrozenModel, SandboxRunner
@@ -77,6 +78,7 @@ def run_task(
     limits: RunLimits | None = None,
     mode: Mode = "baseline",
     repair: RepairLimits | None = None,
+    interrupt_after: int | None = None,
 ) -> TaskRun:
     """Run one mode once on a task, then grade the result with hidden tests."""
     view = loaded.task.agent_view()
@@ -100,10 +102,80 @@ def run_task(
         "run_id": run_id,
     }
     if mode == "repair":
-        record, patched = run_repair(**common, repair=repair)
+        # A repair run stores its state in its own directory, so it can be resumed.
+        record, patched = run_repair(
+            **common,
+            repair=repair,
+            checkpoint_dir=directory,
+            secrets=secrets,
+            interrupt_after=interrupt_after,
+        )
     else:
         record, patched = run_baseline(**common)
+    return _grade(loaded, run_index, record, patched, directory, secrets, sandbox)
 
+
+def resume_task(
+    loaded: LoadedTask,
+    directory: Path,
+    *,
+    model: ModelClient,
+    sandbox: SandboxRunner,
+    ledger: SpendLedger,
+    interrupt_after: int | None = None,
+) -> TaskRun:
+    """Continue an interrupted repair run from its directory, then grade it.
+
+    The checkpoint must belong to this task and to the trace beside it. A
+    run that had already finished is not run again: its result is rebuilt
+    from the checkpoint and graded.
+    """
+    checkpoint = load_checkpoint(directory)
+    view = loaded.task.agent_view()
+    if checkpoint.task_id != view.task_id:
+        raise CheckpointError(
+            f"the checkpoint is for task {checkpoint.task_id}, not {view.task_id}"
+        )
+    started = next(
+        (event for event in read_trace(directory / TRACE_FILE) if event.get("type") == "start"),
+        {},
+    )
+    identity = ("run_id", "task_id", "repository_tree_sha256", "prompt_sha256", "config_sha256")
+    if any(started.get(name) != getattr(checkpoint, name) for name in identity):
+        raise CheckpointError("the checkpoint and the trace beside it are from different runs")
+    secrets = secrets_from_environment()
+    record, patched = resume_repair(
+        checkpoint=checkpoint,
+        checkpoint_dir=directory,
+        files=loaded.agent_files(),
+        source_roots=view.environment.source_roots,
+        commands=view.commands,
+        sandbox_limits=view.budgets,
+        model=model,
+        sandbox=sandbox,
+        ledger=ledger,
+        trace=TraceWriter(directory, secrets, append=True),
+        secrets=secrets,
+        interrupt_after=interrupt_after,
+    )
+    index = checkpoint.run_id.rsplit("-", 1)[-1]
+    return _grade(
+        loaded, int(index) if index.isdigit() else 1, record, patched, directory, secrets, sandbox
+    )
+
+
+def _grade(
+    loaded: LoadedTask,
+    run_index: int,
+    record: RunRecord,
+    patched: dict[str, bytes] | None,
+    directory: Path,
+    secrets: Sequence[str],
+    sandbox: SandboxRunner,
+) -> TaskRun:
+    """Grade a finished run with hidden tests and write its record and report."""
+    view = loaded.task.agent_view()
+    files = loaded.agent_files()
     # The run is over and its record is final. Only now are hidden tests used.
     resolved = False
     trustworthy: bool | None = None

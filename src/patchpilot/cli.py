@@ -10,7 +10,9 @@ from pydantic import ValidationError
 
 from patchpilot import __version__
 from patchpilot.agent.baseline import RepairLimits, RunLimits
+from patchpilot.agent.checkpoint import CheckpointError, load_checkpoint
 from patchpilot.agent.prompts import BugDescription
+from patchpilot.agent.repair import Interrupted
 from patchpilot.agent.trace import (
     TraceError,
     recorded_mode,
@@ -19,7 +21,14 @@ from patchpilot.agent.trace import (
     text_digest,
 )
 from patchpilot.config import Settings
-from patchpilot.eval.harness import Mode, evaluate, run_task, summary_table
+from patchpilot.eval.harness import (
+    Mode,
+    TaskRun,
+    evaluate,
+    resume_task,
+    run_task,
+    summary_table,
+)
 from patchpilot.intake.allowlist import AllowlistError, RepositoryNotApprovedError, load_allowlist
 from patchpilot.intake.github import GitHubClient, GitHubError
 from patchpilot.intake.pipeline import run_intake
@@ -123,6 +132,10 @@ _LIVE_HELP = (
     "Make real model API calls, paid unless the provider's free tier applies. "
     "Needs credentials and the owner's authorization."
 )
+_INTERRUPT_HELP = (
+    "For exercising resume: stop a repair run after this many checkpoints, as a "
+    "process failure would."
+)
 _MODE_HELP = (
     "baseline: one proposal, no feedback. repair: up to PATCHPILOT_MAX_ATTEMPTS "
     "proposals, each after feedback from the agent's own checks."
@@ -190,6 +203,7 @@ def run(
     ] = None,
     live: Annotated[bool, typer.Option("--live", help=_LIVE_HELP)] = False,
     mode: Annotated[Mode, typer.Option(help=_MODE_HELP)] = "baseline",
+    interrupt_after: Annotated[int | None, typer.Option(min=1, help=_INTERRUPT_HELP)] = None,
     tasks_root: Annotated[Path, typer.Option(help="Folder holding the tasks.")] = TASKS_ROOT,
 ) -> None:
     """Run one mode on one task, then grade it with hidden tests."""
@@ -218,8 +232,11 @@ def run(
             limits=RunLimits.for_provider(settings.provider, settings.selected_model),
             mode=mode,
             repair=RepairLimits(max_attempts=settings.max_attempts),
+            interrupt_after=interrupt_after,
         )
-    except TraceError as error:
+    except Interrupted as stop:
+        raise _interrupted(stop, directory / f"{task}-1", replay) from None
+    except (TraceError, CheckpointError) as error:
         typer.echo(f"failed: {error}", err=True)
         raise typer.Exit(code=1) from None
     record = result.record
@@ -228,12 +245,67 @@ def run(
         if expected is not None and expected != (record.status.value, text_digest(record.diff)):
             typer.echo("failed: the replay does not match the outcome the trace recorded", err=True)
             raise typer.Exit(code=1)
+    _show(result, directory / record.run_id)
+
+
+def _show(result: TaskRun, directory: Path) -> None:
+    record = result.record
     graded = ("resolved" if result.resolved else "not resolved") if result.graded else "not graded"
     typer.echo(f"status: {record.status.value}")
     typer.echo(f"detail: {record.detail}")
     typer.echo(f"hidden tests: {graded}")
     typer.echo(f"cost: ${usd(record.cost_micro_usd):.4f}")
-    typer.echo(f"report: {directory / record.run_id / 'report.md'}")
+    typer.echo(f"report: {directory / 'report.md'}")
+
+
+def _interrupted(stop: Interrupted, directory: Path, replay: Path | None) -> typer.Exit:
+    typer.echo(f"interrupted: {stop}", err=True)
+    source = f" --replay {replay}" if replay is not None else " --replay <trace>"
+    typer.echo(f"resume with: patchpilot resume {directory}{source}", err=True)
+    return typer.Exit(code=3)
+
+
+@app.command()
+def resume(
+    run_dir: Annotated[Path, typer.Argument(help="Directory of an interrupted repair run.")],
+    replay: Annotated[
+        Path, typer.Option(help="Trace that supplies the model's answers. Makes no model call.")
+    ],
+    interrupt_after: Annotated[int | None, typer.Option(min=1, help=_INTERRUPT_HELP)] = None,
+    tasks_root: Annotated[Path, typer.Option(help="Folder holding the tasks.")] = TASKS_ROOT,
+) -> None:
+    """Continue an interrupted repair run from its checkpoint, then grade it.
+
+    Offline only: the model's remaining answers come from a trace. The run
+    keeps its identity, its limits and everything it has already used.
+    """
+    settings = _settings()
+    directory, root = run_dir.resolve(), settings.runs_dir.resolve()
+    if directory == root or not directory.is_relative_to(root):
+        raise _refuse(f"a run is resumed only from inside the runs folder {root}")
+    try:
+        checkpoint = load_checkpoint(directory)
+        loaded = load_task(tasks_root / checkpoint.task_id)
+        # The answers the run already received are not asked for again.
+        model = replay_model(replay, skip=checkpoint.state.generation_attempts)
+    except (CheckpointError, TaskError, TraceError) as error:
+        raise _refuse(str(error)) from None
+    try:
+        result = resume_task(
+            loaded,
+            directory,
+            model=model,
+            sandbox=_ready_sandbox(),
+            ledger=SpendLedger(settings.runs_dir / "ledger.jsonl", settings.max_cost_usd),
+            interrupt_after=interrupt_after,
+        )
+    except Interrupted as stop:
+        raise _interrupted(stop, directory, replay) from None
+    except (CheckpointError, TraceError, BudgetExceededError) as error:
+        typer.echo(f"failed: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"resumed from checkpoint {checkpoint.sequence} of run {checkpoint.run_id}")
+    _show(result, directory)
 
 
 @app.command(name="eval")

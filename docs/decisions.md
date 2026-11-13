@@ -21,6 +21,10 @@ Each record states the decision, the reason, and what was rejected.
 
 ## 3. Baseline in plain Python, LangGraph only for the repair loop
 
+**Superseded on 2026-11-13 by record 15 for V1.** The first half stands: the
+baseline is plain functions and the repair loop reuses them. LangGraph was
+not adopted. The original text is kept below.
+
 - **Decision:** the single-attempt baseline is plain functions. LangGraph
   wraps the same functions for the stateful repair loop.
 - **Reason:** LangGraph is used for checkpointing and resume. Node logic
@@ -35,6 +39,9 @@ Each record states the decision, the reason, and what was rejected.
 - **Reason:** avoids unsafe deserialization of stored state.
 - **Open point:** the exact settings are confirmed against the pinned
   LangGraph version in Milestone 6.
+- **Closed on 2026-11-13:** there is no LangGraph version to confirm against
+  (record 15). Checkpoints are JSON written and read by PatchPilot's own
+  code, validated against a strict schema; nothing is unpickled.
 
 ## 5. Search-and-replace edits, diff from git
 
@@ -148,3 +155,35 @@ Each record states the decision, the reason, and what was rejected.
   another model or provider, the legacy `generateContent` API (still
   supported, but no longer the documented path), server-side conversation
   state.
+
+## 15. Checkpoints and resume on the JSON repair state, without LangGraph
+
+- **Decision (owner, 2026-11-13):** resume is built on the existing
+  `RepairState` and its transition functions. LangGraph is not a dependency
+  of V1. This supersedes record 3's choice of LangGraph for the repair loop
+  and replaces the SQLite run state of record 9 with one JSON checkpoint
+  file per run; the JSONL trace of record 9 is unchanged.
+- **Reason:**
+  - The repair loop is small, bounded and sequential: three steps and at
+    most five proposals.
+  - The state object and the step functions already existed and were
+    already plain JSON and plain functions.
+  - A JSON checkpoint, written atomically at fixed boundaries, meets the
+    durability the milestone needs with no new dependency. LangGraph would
+    add a dependency tree, including a tracing client that must be kept off
+    for traces to stay local.
+  - The priority is reliable behavior and speed of development, not a
+    framework for its name.
+- **What was built instead:** `agent/checkpoint.py` (schema version, run
+  identity, limits, content hash, atomic replace, bounded and validated
+  loading) and `resume_repair` in `agent/repair.py`. A resume is refused,
+  before any model call, if the checkpoint is corrupt, incompatible,
+  inconsistent, for other files or prompts, or older than what the spend
+  ledger shows was done.
+- **Still open for later:** LangGraph remains an option if the workflow
+  grows branching, parallel steps or human-in-the-loop stages that would
+  justify it.
+- **Rejected:** hand-written resume that repeats a model request whose
+  outcome is unknown (the run is refused instead), a database for run state
+  (one file per run is enough), resuming live runs in V1 (see
+  `docs/repair-loop.md`).

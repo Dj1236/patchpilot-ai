@@ -65,12 +65,16 @@ def request_digest(request: ModelRequest) -> str:
 class TraceWriter:
     """Appends events to a private trace file, redacting secrets."""
 
-    def __init__(self, directory: Path, secrets: Iterable[str] = ()) -> None:
+    def __init__(
+        self, directory: Path, secrets: Iterable[str] = (), *, append: bool = False
+    ) -> None:
         directory.mkdir(parents=True, exist_ok=True)
         directory.chmod(0o700)
         self.path = directory / TRACE_FILE
         self._secrets = tuple(secret for secret in secrets if len(secret) >= _MIN_SECRET_LENGTH)
-        descriptor = os.open(self.path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+        # A resumed run continues its trace; a new run starts an empty one.
+        mode = os.O_APPEND if append else os.O_TRUNC
+        descriptor = os.open(self.path, os.O_CREAT | os.O_WRONLY | mode, 0o600)
         os.close(descriptor)
 
     def _write(self, event: dict[str, Any]) -> None:
@@ -97,6 +101,10 @@ class TraceWriter:
 
     def error(self, index: int, error: ModelError) -> None:
         self._write({"type": "error", "index": index, "kind": error.kind, "message": str(error)})
+
+    def resumed(self, sequence: int, phase: str, attempt: int) -> None:
+        """Record that the run continues in a new process from a checkpoint."""
+        self._write({"type": "resumed", "sequence": sequence, "phase": phase, "attempt": attempt})
 
     def transition(self, source: str, target: str, attempt: int, reason: str) -> None:
         """Record one step of a repair run's state machine."""
@@ -154,7 +162,7 @@ class ReplayModel(ScriptedModel):
             raise TraceError("the trace ends before the run does; it is incomplete") from None
 
 
-def replay_model(path: Path) -> ReplayModel:
+def replay_model(path: Path, *, skip: int = 0) -> ReplayModel:
     """Return a model that replays a trace and makes no network call.
 
     Every request the pipeline makes during the replay is compared with the
@@ -162,6 +170,9 @@ def replay_model(path: Path) -> ReplayModel:
     prompts, code or the trace itself changed since it was recorded, and
     stops the replay instead of pairing an old answer with a new question.
     A trace that is not well formed is refused before anything runs.
+
+    ``skip`` leaves out the first answers of the trace, for a run that is
+    resumed after it has already received them.
     """
     scripted: list[Scripted] = []
     try:
@@ -188,4 +199,4 @@ def replay_model(path: Path) -> ReplayModel:
                 scripted.append(checked)
     except (KeyError, TypeError, AttributeError, ValidationError):
         raise TraceError(f"{path} is damaged or is not a PatchPilot trace") from None
-    return ReplayModel(scripted)
+    return ReplayModel(scripted[skip:])
