@@ -71,6 +71,39 @@ Every model request goes through reserve, send, settle.
 Prices are pinned in `llm/budget.py` with the date they were read. A model
 with no pinned price cannot be called.
 
+## Preflight and credentials
+
+`patchpilot preflight --task <id>` makes two free requests and no generation
+request:
+
+1. the model-metadata endpoint, to confirm the credential works and the model
+   is available to it;
+2. the token-counting endpoint, for the exact first request the baseline
+   would send, with its tools, answer schema, effort and thinking settings.
+
+It then prints the provider's token count, the cost of that input alone, and
+the larger amount the paid path would reserve for the first request, and
+says whether that reservation fits the run cap and the total cap. It writes
+nothing to the ledger.
+
+A clean preflight shows the credential, the model and the request shape are
+acceptable for counting. **It does not guarantee the first paid request
+succeeds.**
+
+Failures are reported by kind (`no_credentials`, `authentication`,
+`permission`, `model_unavailable`, `malformed_request`, `rate_limited`,
+`connection`, `provider_error`). The provider's own explanation of a
+rejected request is shown, bounded and with known secrets removed. Prompt
+contents are never printed.
+
+**Credentials.** Use a dedicated key for PatchPilot. Preferred: export
+`ANTHROPIC_API_KEY` in the shell that starts PatchPilot, from a secret store
+or a file outside the repository. Acceptable: a git-ignored `.env` in the
+repository with permissions `600`; PatchPilot does not load it by itself, so
+it must be loaded into the environment by the person running the command.
+The key is read only by the SDK. PatchPilot never reads, prints, logs or
+stores it.
+
 ## Traces, reports and replay
 
 | File | Contents | Audience |

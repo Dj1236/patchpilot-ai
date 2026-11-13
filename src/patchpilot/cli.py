@@ -8,6 +8,8 @@ from typing import Annotated
 import typer
 
 from patchpilot import __version__
+from patchpilot.agent.baseline import RunLimits
+from patchpilot.agent.prompts import BugDescription
 from patchpilot.agent.trace import TraceError, recorded_outcome, replay_model, text_digest
 from patchpilot.config import Settings
 from patchpilot.eval.harness import evaluate, run_task, summary_table
@@ -17,6 +19,7 @@ from patchpilot.intake.pipeline import run_intake
 from patchpilot.intake.urls import IssueUrlError
 from patchpilot.llm.base import ModelClient
 from patchpilot.llm.budget import SpendLedger, usd
+from patchpilot.llm.preflight import PreflightError, connect, first_request, run_preflight
 from patchpilot.repo.fetch import FetchError
 from patchpilot.sandbox.docker import DockerSandbox
 from patchpilot.tasks.loader import TaskError, discover_tasks, load_task
@@ -195,3 +198,65 @@ def evaluate_tasks(
     table = summary_table(summary)
     (directory / "summary.md").write_text(table)
     typer.echo(table)
+
+
+@app.command()
+def preflight(
+    task: Annotated[str, typer.Option(help="ID of an evaluation task under the tasks folder.")],
+    tasks_root: Annotated[Path, typer.Option(help="Folder holding the tasks.")] = TASKS_ROOT,
+) -> None:
+    """Check the model and count the first request's tokens. Free: nothing is generated.
+
+    Contacts the provider with the configured credential, using only the
+    model-metadata and token-counting endpoints.
+    """
+    settings = Settings()
+    try:
+        loaded = load_task(tasks_root / task)
+    except TaskError as error:
+        raise _refuse(str(error)) from None
+    view = loaded.task.agent_view()
+    request = first_request(
+        BugDescription.from_issue(view.issue),
+        source_roots=view.environment.source_roots,
+        commands=view.commands,
+        limits=RunLimits(),
+    )
+    ledger = SpendLedger(settings.runs_dir / "ledger.jsonl", settings.max_cost_usd)
+    try:
+        report = run_preflight(
+            connect(),
+            request,
+            task_id=view.task_id,
+            run_cap_usd=settings.run_cap_usd,
+            total_cap_usd=settings.max_cost_usd,
+            ledger_committed_micro_usd=ledger.committed(),
+        )
+    except PreflightError as error:
+        typer.echo(f"preflight failed ({error.kind}): {error}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"task: {report.task_id}")
+    typer.echo(f"model: {report.model} ({report.model_display_name or 'no display name'})")
+    typer.echo(f"effort: {report.effort}, adaptive thinking")
+    typer.echo(f"prompt hash: {report.prompt_sha256}")
+    typer.echo(f"input tokens counted by the provider: {report.input_tokens_counted}")
+    typer.echo(
+        f"estimated cost of that input alone: ${usd(report.estimated_input_cost_micro_usd):.4f}"
+    )
+    typer.echo(
+        f"reservation for the first request: ${usd(report.reservation_micro_usd):.4f} "
+        f"({report.input_tokens_reserved} padded input tokens at the dearest input rate, "
+        f"plus the full {report.max_output_tokens}-token output limit)"
+    )
+    typer.echo(
+        f"run cap: ${usd(report.run_cap_micro_usd):.2f}, "
+        f"fits: {'yes' if report.fits_run_cap else 'NO'}"
+    )
+    typer.echo(
+        f"total cap: ${usd(report.total_cap_micro_usd):.2f}, already committed: "
+        f"${usd(report.ledger_committed_micro_usd):.4f}, "
+        f"fits: {'yes' if report.fits_total_cap else 'NO'}"
+    )
+    typer.echo("no generation request was made; this does not guarantee a paid request succeeds")
+    if not (report.fits_run_cap and report.fits_total_cap):
+        raise typer.Exit(code=1)
