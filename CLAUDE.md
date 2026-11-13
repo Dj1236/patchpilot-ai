@@ -6,9 +6,14 @@ before changing behavior.
 
 ## Current state
 
-Milestones 2 to 4 and the Milestone 5 baseline agent (steps 1 to 11) are built
-and verified locally. No live model call has been made; the live pilot needs
-the owner's separate authorization. GitHub Actions cannot start on this account, so no CI gate
+Milestones 2 to 4 and the Milestone 5 baseline agent (steps 1 to 11) are
+merged and verified locally, and so is the free `patchpilot preflight`
+command. No live model call has been made, and the preflight has not been run
+with a credential. The next step is the live pilot in `docs/pilot-plan.md`:
+it is planned but not authorized, has an open decision for the owner, and
+each live run needs its own go-ahead. PatchPilot does not load `.env`; the
+key comes from the process environment.
+Milestone 6 is not started and waits for measured live results. GitHub Actions cannot start on this account, so no CI gate
 has passed; see `docs/ci-status.md` and never describe CI as green. Each
 later milestone needs the owner's explicit authorization before work starts.
 See the milestone table in `docs/spec.md`.
@@ -24,6 +29,7 @@ uv run ruff format .            # format
 uv run mypy                     # strict type check
 uv run pre-commit run --all-files
 uv run patchpilot version
+uv run patchpilot preflight --task <id>   # free, but contacts the API: needs a go-ahead
 ```
 
 ## Layout
