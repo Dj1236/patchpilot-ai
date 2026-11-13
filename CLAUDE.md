@@ -32,6 +32,7 @@ uv run mypy                     # strict type check
 uv run pre-commit run --all-files
 uv run patchpilot version
 uv run patchpilot preflight --task <id>   # free, but contacts the API: needs a go-ahead
+uv run patchpilot probe                   # one real Gemini generation request: needs a go-ahead
 ```
 
 ## Layout
