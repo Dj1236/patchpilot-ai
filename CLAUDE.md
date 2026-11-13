@@ -15,6 +15,10 @@ one minimal probe were made on 2026-11-13; all five generation requests got
 HTTP 503 from the provider, so there is still no model output and no graded
 result. See "Outcome so far" in `docs/pilot-plan.md`. Each further live
 request needs its own go-ahead. Keep `runs/` and its ledger as they are.
+Milestone 6 was started offline with the owner's authorization: the repair
+loop (`--mode repair`, `docs/repair-loop.md`) is built and verified with
+scripted models only. Checkpointing and resume through LangGraph are not
+built; adding that dependency needs the owner's decision.
 PatchPilot does not load `.env`; the key comes from the process environment.
 Milestone 6 is not started and waits for measured live results. GitHub Actions cannot start on this account, so no CI gate
 has passed; see `docs/ci-status.md` and never describe CI as green. Each
@@ -48,6 +52,7 @@ uv run patchpilot probe                   # one real Gemini generation request: 
 - `src/patchpilot/llm/`: provider interface, scripted fake model, spend
   ledger, Anthropic client, Gemini client, preflight.
 - `src/patchpilot/agent/`: prompts, proposal format, baseline pipeline,
+  repair loop,
   sandbox verification, traces, reports.
 - `src/patchpilot/patch/`: safe edit application, diff, patch policy.
 - `src/patchpilot/eval/`: evaluation harness.
@@ -100,6 +105,10 @@ uv run patchpilot probe                   # one real Gemini generation request: 
 - **Hidden evaluation tests never enter the agent's workspace, images or
   prompts.** Give an agent `Task.agent_view()` and `LoadedTask.agent_files()`
   only.
+- **Feedback to the model comes only from the agent's own checks.** In a
+  repair run the model may be told about its proposal's errors, the patch
+  rules and tests it can see. Never pass anything from grading or hidden
+  tests back into a run.
 - **Grade only through `grade_candidate`.** It rebuilds the tree from pinned
   tests; never run hidden tests on a tree the candidate assembled.
 - **Never weaken a sandbox restriction to make a test pass.** Security tests

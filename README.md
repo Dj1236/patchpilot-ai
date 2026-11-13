@@ -23,13 +23,14 @@ answered every request with HTTP 503, so there is no live result yet.
 | 3. Sandbox and task format | Built and verified locally; not yet run on Linux CI |
 | 4. Intake and repository tools | Built and verified locally; not yet run on Linux CI |
 | 5. Baseline end to end, plus evaluator | Built and verified locally with a scripted model; live pilot not run |
-| 6. Stateful repair loop | Not started |
+| 6. Stateful repair loop | Loop built and verified offline with scripted models ([details](docs/repair-loop.md)); checkpoint and resume not built |
 | 7. Report and approval-gated draft PR | Not started |
 | 8. Evaluation and release | Not started |
 
 ## Design
 
 - [Specification](docs/spec.md)
+- [Repair loop](docs/repair-loop.md)
 - [Threat model](docs/threat-model.md)
 - [Technology decisions](docs/decisions.md)
 - [Sandbox](docs/sandbox.md)
