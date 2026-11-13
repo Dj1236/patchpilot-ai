@@ -3,13 +3,20 @@
 Status: **planned, not authorized, not run.** No paid model call has been
 made. Each live run needs the owner's explicit go-ahead for that run.
 
-## Open decisions (owner has not answered yet)
+## Decided
 
-1. Add a `patchpilot preflight` command (free credential and token-count
-   checks) through a small pull request before the pilot. Recommended.
-2. Key handling: `ANTHROPIC_API_KEY` in the git-ignored `.env`, loaded by the
-   run command into its own process. Never printed, never pasted into chat.
-3. Pause points: 0.40 USD for one run, 3 USD cumulative.
+- The free `patchpilot preflight` command exists (pull request #5). The
+  owner has approved its two free requests, to be run by the owner once the
+  key is configured. It has not been run with a credential yet.
+- Key handling: `ANTHROPIC_API_KEY` is provided through the environment of
+  the process that starts PatchPilot. PatchPilot does not load `.env` by
+  itself; see "Preflight and credentials" in [baseline.md](baseline.md). The
+  key is set by the owner in a separate terminal, never printed and never
+  pasted into chat.
+
+## Open decision (owner has not answered yet)
+
+- Pause points: 0.40 USD for one run, 3 USD cumulative.
 
 ## Configuration
 
@@ -26,12 +33,15 @@ made. Each live run needs the owner's explicit go-ahead for that run.
 ## Step 0: no-cost checks
 
 1. Full local suite and sandbox tests green on `main`.
-2. A free model-metadata request, to confirm the key and the model.
-3. A free token-count request for the real first prompt of
-   `inj-001-cachekit`, with tools, schema and thinking settings, to get the
-   true input size and catch a malformed request before paying.
+2. `uv run patchpilot preflight --task inj-001-cachekit`. It makes two free
+   requests and no generation request, and writes nothing to the ledger:
+   - model metadata, to confirm the key and the model;
+   - a token count for the real first prompt, with tools, schema and
+     thinking settings, to get the true input size and catch a malformed
+     request before paying.
 
-Checks 2 and 3 contact the API with the key, so they need a go-ahead too.
+The preflight contacts the API with the key, so it needs a go-ahead too. A
+clean preflight does not guarantee that the first paid request succeeds.
 
 ## Sequence: one run at a time
 
