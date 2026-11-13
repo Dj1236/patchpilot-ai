@@ -53,7 +53,7 @@ returns a tested patch with evidence, for a human to accept or reject.
 
 | Component | Responsibility | Boundary rule |
 |---|---|---|
-| CLI | `run`, `resume`, `report`, `eval` | Paid calls require an explicit live flag; the default is the fake model. |
+| CLI | `run`, `resume`, `preflight`, `probe`, `eval` | Paid calls require an explicit live flag; the default is the fake model. |
 | Config | Allowlist, budgets, model ID, sandbox limits | Validated at start-up. |
 | Intake | Fetch and normalize the issue | Allowlist is checked in code before any clone. |
 | Workspace | Clone at a pinned SHA, apply edits, produce the diff | Hooks, submodules and LFS are disabled. |
@@ -111,7 +111,9 @@ hidden tests.
 
 Baseline mode uses the same path with no ANALYZE step: one attempt, verified
 once, no feedback. It is implemented as plain Python functions. The repair
-loop reuses those same functions as LangGraph nodes.
+loop reuses those same functions as the steps of a small state machine with
+JSON checkpoints. LangGraph, named here originally, was not adopted for V1;
+see [decisions.md](decisions.md), record 15.
 
 ### Safe edit application
 
@@ -206,7 +208,7 @@ See [threat-model.md](threat-model.md).
 | 3 | Sandbox and task format; first two or three fixtures | Safety tests pass on Linux CI | Installing a Docker runtime |
 | 4 | Intake and repository tools | Allowlist and path-confinement tests pass | n/a |
 | 5 | Baseline end to end, plus evaluator | One fixture graded `resolved` by hidden tests; pilot cost measured | First live calls. The pilot uses free-tier Gemini; any paid call stays within 10 USD |
-| 6 | Stateful repair loop on LangGraph | Resume works; loop compared with baseline on the fixtures | n/a |
+| 6 | Stateful repair loop with JSON checkpoints (originally: on LangGraph; see decision 15) | Resume works; loop compared with baseline on the fixtures | n/a |
 | 7 | Final report; approval-gated draft PR as an extension | Fake-API write test passes | Creating a write token |
 | 8 | Full task set, results, documentation, release | Criteria 1-12 | Benchmark budget, estimated from the pilot |
 

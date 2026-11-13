@@ -4,9 +4,8 @@ The repair loop is the baseline plus one thing: after a proposal that is not
 accepted, the model is told why and may propose again, a small and fixed
 number of times.
 
-Status: **built and verified offline with scripted models. No live model has
-run it.** Checkpointing and resume through LangGraph are not built yet; see
-"What is left for Milestone 6".
+Status: **built and verified offline with scripted models, including
+checkpoints and resume. No live model has run it.**
 
 ```
 propose -> evaluate -> verified                   -> done
@@ -43,7 +42,8 @@ state. After every step the state is complete and can be serialized; a test
 round-trips it through JSON at each transition.
 
 What is not in the state: the repository files, the sandbox, the model
-client and the ledger. They are inputs, rebuilt from the task.
+client and the ledger. They are inputs, rebuilt from the task. The state is
+stored as a checkpoint; see "Checkpoints and resume".
 
 ## Rules of a run
 
@@ -156,16 +156,122 @@ The table comes from `comparison_table` in `eval/harness.py`, exercised by
 - **The last proposal is the answer,** even when an earlier one was better.
 - **Feedback is bounded and sampled:** five failing tests at most.
 - **Replay depends on deterministic test output.**
-- **A run cannot be resumed** after the process stops.
+- **A run resumes offline only,** and not after a stop in the middle of a
+  model request; see "Checkpoints and resume".
+
+## Checkpoints and resume
+
+A repair run stores its state in `checkpoint.json` in its own run directory,
+next to `trace.jsonl`. No framework and no database are involved; see
+decision 15 in [decisions.md](decisions.md).
+
+### What a checkpoint holds
+
+- `schema_version` (1) and the run's fixed identity: `run_id`, `task_id`,
+  mode, start time, the digest of the repository files, the prompt hash and
+  the configuration hash.
+- The run's limits: `RunLimits` (provider, model, turns, tools, policy) and
+  `RepairLimits`, and the run cap.
+- `sequence`: the number of this checkpoint within the run.
+- `state`: the `RepairState`: phase, proposal number, the conversation, a
+  pending proposal, every attempt with its verification, and the counters
+  (model turns, generation attempts, retries, token-count requests, tokens,
+  tool calls and tool output, cost, elapsed time).
+- A SHA-256 hash of all of the above.
+
+It holds what the model was shown and answered, like the trace, so it stays
+local. Known secret values are removed before writing. It holds nothing
+from hidden tests, because a run never has them; a test checks the stored
+file. The file and its directory are readable by the owner only. Run
+directories live under `runs/`, which git ignores.
+
+### When it is written
+
+At boundaries where the state is complete, and nowhere else:
+
+1. **Before every model request.** The previous answer has been received,
+   its cost settled in the ledger and its tool calls answered.
+2. **After every step:** a proposal was given; it was evaluated; feedback
+   was given; the run ended.
+
+Writing is atomic and durable: the content goes to a temporary file in the
+same directory, is flushed to disk, replaces the old file in one step, and
+the directory is flushed. A reader sees the old checkpoint or the new one.
+
+### Resuming
+
+```
+patchpilot resume <run directory> --replay <trace>
+```
+
+The run continues in the same directory with the same run id. It keeps its
+limits and everything it has used: proposals, model turns, generation
+attempts, tokens, tool calls, cost and elapsed time. The limits are read
+from the checkpoint, not from the current settings, so restarting cannot
+raise them. Nothing completed is done again. A run that had already
+finished is not run again: its result is rebuilt from the checkpoint and
+graded.
+
+**V1 resumes offline only.** The remaining answers come from a trace, with
+the answers the run already received skipped. Resuming a live run is not
+offered: the Gemini adapter's limit of 8 generation attempts is per process
+and would start again, and no live run is authorized in any case.
+
+### What is refused
+
+Each of these stops the resume before any model call:
+
+- no checkpoint, a symlink, a file larger than 16 MB, invalid JSON, a wrong
+  content hash, another schema version, an unknown field;
+- a state that contradicts itself (phase, pending proposal, proposal count);
+- another task, changed task files, changed prompts, limits that do not
+  match the stored configuration hash, a trace beside it from another run;
+- a run directory outside the runs folder;
+- **a checkpoint the spend ledger shows to be out of date.** The ledger is
+  written before and after every model request. If it holds a reservation
+  for this run that was never settled, a request was in flight when the
+  process stopped, and whether it completed cannot be known. If it holds
+  more requests than the checkpoint counts, work was done after the
+  checkpoint was written. In both cases the run is not continued, and the
+  open reservation stays charged in full.
+
+### What a stop in the middle of something does
+
+| The process stopped | On resume |
+|---|---|
+| at a checkpoint | continues from there |
+| during sandbox checks | the checks of that proposal run again from the start; they have no side effects and no cost; the proposal is not asked for again |
+| during a model request | refused: outcome unknown |
+| after an answer, before the next checkpoint | refused: the checkpoint is stale |
+| while writing a checkpoint | the previous checkpoint is intact; refused if a request completed since |
+
+A refused run is not lost: its trace, ledger entries and last checkpoint
+stay as they are. It is simply not continued; a new run can be started.
+
+### Trying it
+
+`--interrupt-after N` stops a repair run after its Nth checkpoint, as a
+process failure would. With a recorded repair trace and a scratch runs
+folder, so the real ledger is not touched:
+
+```
+export PATCHPILOT_RUNS_DIR=/tmp/patchpilot-demo/runs
+uv run patchpilot run --task inj-001-cachekit --replay <trace> --interrupt-after 5
+uv run patchpilot resume <run directory printed above> --replay <trace>
+```
+
+### Limits of resume
+
+- Offline only, as said above.
+- A stop during a model request, or between an answer and its checkpoint,
+  ends the run for good.
+- Time while the process was down is not counted against the time budget.
+- Only repair runs are checkpointed. A baseline run is one short attempt.
+- The content hash detects damage, not forgery: someone who can edit the
+  file can also recompute the hash. The cross-checks against the ledger,
+  the trace and the task still apply.
 
 ## What is left for Milestone 6
 
-- Checkpointing and `resume`. The specification assigns this to LangGraph,
-  with JSON-only checkpoints. The steps and the state were written for it:
-  the steps are plain functions and the state is JSON, and `run_repair`
-  already hands the state to a callback after every transition. Adding
-  LangGraph brings a new dependency tree, including a tracing client that
-  must be kept off so that traces stay local. That is a decision for the
-  owner.
 - The comparison on live runs, three per task and mode, once a provider
-  answers.
+  answers. Everything that can be done offline is done.
