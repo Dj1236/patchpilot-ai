@@ -10,8 +10,8 @@ Milestones 2 to 4 and the Milestone 5 baseline agent (steps 1 to 11) are
 merged and verified locally, and so is the free `patchpilot preflight`
 command. No live model call has been made, and the preflight has not been run
 with a credential. The next step is the live pilot in `docs/pilot-plan.md`:
-it is planned but not authorized, has an open decision for the owner, and
-each live run needs its own go-ahead. PatchPilot does not load `.env`; the
+it is planned but not authorized, its thresholds are confirmed, and each
+live run needs its own go-ahead. PatchPilot does not load `.env`; the
 key comes from the process environment.
 Milestone 6 is not started and waits for measured live results. GitHub Actions cannot start on this account, so no CI gate
 has passed; see `docs/ci-status.md` and never describe CI as green. Each

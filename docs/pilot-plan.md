@@ -13,10 +13,11 @@ made. Each live run needs the owner's explicit go-ahead for that run.
   itself; see "Preflight and credentials" in [baseline.md](baseline.md). The
   key is set by the owner in a separate terminal, never printed and never
   pasted into chat.
+- Spending thresholds, confirmed by the owner: hard caps of 0.75 USD per run
+  and 5 USD for the whole pilot, enforced by the ledger; pause for review
+  after a run above 0.40 USD or once the ledger passes 3 USD.
 
-## Open decision (owner has not answered yet)
-
-- Pause points: 0.40 USD for one run, 3 USD cumulative.
+No decision is open. Each live run still needs its own go-ahead.
 
 ## Configuration
 
