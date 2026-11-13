@@ -9,8 +9,9 @@ import pytest
 from pydantic import ValidationError
 
 from patchpilot.agent.baseline import RepairLimits, RunLimits, RunRecord, RunStatus
+from patchpilot.agent.checkpoint import RepairState
 from patchpilot.agent.prompts import REPAIR_SYSTEM_PROMPT, SYSTEM_PROMPT, prompt_hash
-from patchpilot.agent.repair import RepairState, run_repair
+from patchpilot.agent.repair import run_repair
 from patchpilot.agent.report import public_report
 from patchpilot.agent.trace import TraceWriter, read_trace, recorded_mode, replay_model
 from patchpilot.llm.base import ModelError, Usage

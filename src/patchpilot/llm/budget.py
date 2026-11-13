@@ -165,6 +165,28 @@ class SpendLedger:
         with self._locked():
             return self._committed(self._records())
 
+    def run_requests(self, run_id: str) -> tuple[int, int, int]:
+        """Return a run's reservations, how many are still open, and its committed amount.
+
+        Read-only. A reservation that was never settled means a request was
+        in flight when its process stopped; it stays committed in full.
+        """
+        with self._locked():
+            records = self._records()
+        reserved = {
+            str(record["id"]): int(str(record["micro_usd"]))
+            for record in records
+            if record.get("type") == "reserve" and record.get("run_id") == run_id
+        }
+        amounts = dict(reserved)
+        settled: set[str] = set()
+        for record in records:
+            identifier = str(record["id"])
+            if record.get("type") == "settle" and identifier in reserved:
+                amounts[identifier] = int(str(record["micro_usd"]))
+                settled.add(identifier)
+        return len(reserved), len(reserved) - len(settled), sum(amounts.values())
+
     def reserve(self, run_id: str, micro_usd: int) -> str:
         """Reserve ``micro_usd`` or raise ``BudgetExceededError``. Nothing is sent before this."""
         if micro_usd < 0:
