@@ -1,8 +1,8 @@
 # Baseline coding agent
 
 The baseline turns one bug report into one proposed patch in a single
-attempt. It is the reference point that the Milestone 6 repair loop will be
-compared against.
+attempt. It is the reference point that the Milestone 6 repair loop
+([repair-loop.md](repair-loop.md)) is compared against.
 
 ```
 bug report + snapshot

@@ -98,6 +98,18 @@ class TraceWriter:
     def error(self, index: int, error: ModelError) -> None:
         self._write({"type": "error", "index": index, "kind": error.kind, "message": str(error)})
 
+    def transition(self, source: str, target: str, attempt: int, reason: str) -> None:
+        """Record one step of a repair run's state machine."""
+        self._write(
+            {
+                "type": "transition",
+                "from": source,
+                "to": target,
+                "attempt": attempt,
+                "reason": reason,
+            }
+        )
+
     def finish(self, status: str, detail: str, diff: str = "") -> None:
         self._write(
             {"type": "finish", "status": status, "detail": detail, "diff_sha256": text_digest(diff)}
@@ -111,6 +123,14 @@ def read_trace(path: Path) -> list[dict[str, Any]]:
         return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     except ValueError as error:
         raise TraceError(f"{path} is not a valid trace: {error}") from None
+
+
+def recorded_mode(path: Path) -> str:
+    """Return the mode a trace was recorded in: ``baseline`` or ``repair``."""
+    for event in read_trace(path):
+        if isinstance(event, dict) and event.get("type") == "start":
+            return str(event.get("mode", "baseline"))
+    return "baseline"
 
 
 def recorded_outcome(path: Path) -> tuple[str, str] | None:

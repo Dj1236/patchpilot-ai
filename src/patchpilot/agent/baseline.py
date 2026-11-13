@@ -14,7 +14,7 @@ exploring are reading, not retrying. Every ending has one status.
 import hashlib
 import time
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
@@ -97,6 +97,16 @@ class RunLimits(FrozenModel):
         return hashlib.sha256(self.model_dump_json().encode()).hexdigest()
 
 
+class RepairLimits(FrozenModel):
+    """Bounds on a repair run, on top of ``RunLimits``. All are for the whole run."""
+
+    # Proposals the model may give. The strict maximum is five.
+    max_attempts: int = Field(default=3, ge=1, le=5)
+    max_total_tokens: int = Field(default=400_000, ge=1_000)
+    max_generation_attempts: int = Field(default=30, ge=1, le=200)
+    max_seconds: float = Field(default=1_200.0, gt=0)
+
+
 class Manifest(FrozenModel):
     """What is needed to identify and reproduce a run."""
 
@@ -112,6 +122,19 @@ class Manifest(FrozenModel):
     sandbox_image_id: str | None
     run_cap_usd: float
     limits: RunLimits
+    repair: RepairLimits | None = None
+
+
+class Attempt(FrozenModel):
+    """What happened to one proposal. A repair run has several; the baseline has one."""
+
+    status: RunStatus
+    detail: str
+    proposal: PatchProposal | None = None
+    diff: str = ""
+    changed_files: tuple[str, ...] = ()
+    policy_violations: tuple[str, ...] = ()
+    verification: Verification | None = None
 
 
 class RunRecord(FrozenModel):
@@ -137,6 +160,8 @@ class RunRecord(FrozenModel):
     changed_files: tuple[str, ...] = ()
     policy_violations: tuple[str, ...] = ()
     verification: Verification | None = None
+    # Every proposal of a repair run, in order. Empty for the baseline.
+    attempts: tuple[Attempt, ...] = ()
     manifest: Manifest
 
 
@@ -206,17 +231,28 @@ def _send(
 def _explore_and_propose(
     model: ModelClient,
     tools: RepositoryTools,
-    first_message: str,
+    messages: list[dict[str, Any]],
     limits: RunLimits,
     budget: RunBudget,
     trace: TraceWriter,
     totals: dict[str, Any],
+    *,
+    system: str = SYSTEM_PROMPT,
+    guard: Callable[[], None] | None = None,
 ) -> PatchProposal:
-    messages: list[dict[str, Any]] = [{"role": "user", "content": first_message}]
-    for index in range(limits.max_turns):
+    """Let the model read the snapshot until it answers with a proposal.
+
+    ``messages`` is the conversation so far and is extended in place, so a
+    caller can continue it. ``guard`` runs before every request and may end
+    the run. Turns are counted across calls: the limit is for the whole run.
+    """
+    while totals["turns"] < limits.max_turns:
+        index = totals["turns"]
+        if guard is not None:
+            guard()
         request = ModelRequest(
             model=limits.model,
-            system=SYSTEM_PROMPT,
+            system=system,
             messages=tuple(messages),
             tools=tool_specs(),
             output_schema=PROPOSAL_SCHEMA,
@@ -255,6 +291,8 @@ def _explore_and_propose(
             messages.append({"role": "user", "content": results})
             continue
         if turn.stop_reason == "end_turn":
+            if turn.content:
+                messages.append({"role": "assistant", "content": list(turn.content)})
             try:
                 return parse_proposal(turn.text)
             except ProposalError as error:
@@ -262,6 +300,148 @@ def _explore_and_propose(
         raise _Stop(RunStatus.INVALID_PROPOSAL, "the model stopped without a proposal")
     raise _Stop(
         RunStatus.BUDGET_EXCEEDED, f"no proposal after the limit of {limits.max_turns} model turns"
+    )
+
+
+def new_totals() -> dict[str, Any]:
+    """Return the counters one run keeps while it talks to the model."""
+    return {
+        "turns": 0,
+        "attempts": 0,
+        "retries": 0,
+        "token_counts": 0,
+        "usage": Usage(),
+        "models": set(),
+    }
+
+
+def evaluate_proposal(
+    files: Mapping[str, bytes],
+    proposal: PatchProposal,
+    *,
+    limits: RunLimits,
+    commands: Sequence[PytestCommand],
+    sandbox_limits: SandboxLimits,
+    source_roots: Sequence[str],
+    sandbox: SandboxRunner,
+) -> tuple[Attempt, dict[str, bytes] | None]:
+    """Apply one proposal to the original files, check the rules and verify it.
+
+    Returns what happened and the patched tree. The tree is ``None`` unless
+    the proposal applied and broke no patch rule.
+    """
+    try:
+        candidate = apply_proposal(files, proposal)
+    except PatchError as error:
+        return (
+            Attempt(
+                status=RunStatus.INVALID_PROPOSAL,
+                detail=f"{error.code}: {error}",
+                proposal=proposal,
+            ),
+            None,
+        )
+    diff = unified_diff(files, candidate)
+    violations = check_policy(files, proposal, candidate, limits.policy)
+    if violations:
+        return (
+            Attempt(
+                status=RunStatus.REJECTED_POLICY,
+                detail="; ".join(violations),
+                proposal=proposal,
+                diff=diff,
+                policy_violations=violations,
+            ),
+            None,
+        )
+    verification = verify_patch(
+        files,
+        candidate,
+        proposal,
+        commands=commands,
+        limits=sandbox_limits,
+        source_roots=source_roots,
+        sandbox=sandbox,
+    )
+    if verification.infrastructure_failure:
+        status = RunStatus.FAILED_INFRASTRUCTURE
+    elif verification.verified:
+        status = RunStatus.CANDIDATE_VERIFIED
+    else:
+        status = RunStatus.UNVERIFIED
+    attempt = Attempt(
+        status=status,
+        detail=verification.reason,
+        proposal=proposal,
+        diff=diff,
+        changed_files=tuple(
+            sorted(path for path in candidate if candidate[path] != files.get(path))
+        ),
+        verification=verification,
+    )
+    return attempt, candidate
+
+
+def build_record(
+    *,
+    run_id: str,
+    task_id: str,
+    mode: str,
+    status: RunStatus,
+    detail: str,
+    started_at: datetime,
+    duration_seconds: float,
+    totals: Mapping[str, Any],
+    tool_calls: int,
+    cost_micro_usd: int,
+    last: Attempt | None,
+    attempts: Sequence[Attempt],
+    limits: RunLimits,
+    prompt_sha256: str,
+    config_sha256: str,
+    repository_tree_sha256: str,
+    repository_commit: str | None,
+    run_cap_usd: float,
+    repair: RepairLimits | None = None,
+) -> RunRecord:
+    """Assemble the final record of a run from its counters and its last proposal."""
+    verification = last.verification if last else None
+    return RunRecord(
+        run_id=run_id,
+        task_id=task_id,
+        mode=mode,
+        status=status,
+        detail=detail,
+        started_at=started_at,
+        duration_seconds=duration_seconds,
+        model_turns=totals["turns"],
+        generation_attempts=totals["attempts"],
+        retries=totals["retries"],
+        token_count_requests=totals["token_counts"],
+        tool_calls=tool_calls,
+        usage=totals["usage"],
+        cost_micro_usd=cost_micro_usd,
+        proposal=last.proposal if last else None,
+        diff=last.diff if last else "",
+        changed_files=last.changed_files if last else (),
+        policy_violations=last.policy_violations if last else (),
+        verification=verification,
+        attempts=tuple(attempts),
+        manifest=Manifest(
+            runner_version=__version__,
+            provider=limits.provider,
+            model_requested=limits.model,
+            models_reported=tuple(sorted(totals["models"])),
+            effort=limits.effort,
+            prompt_sha256=prompt_sha256,
+            config_sha256=config_sha256,
+            repository_tree_sha256=repository_tree_sha256,
+            repository_commit=repository_commit,
+            sandbox_image_id=verification.image_id if verification else None,
+            run_cap_usd=run_cap_usd,
+            limits=limits,
+            repair=repair,
+        ),
     )
 
 
@@ -297,14 +477,7 @@ def run_baseline(
         max_call_output_bytes=limits.max_tool_call_output_bytes,
     )
     tools = RepositoryTools(files, tool_budget)
-    totals: dict[str, Any] = {
-        "turns": 0,
-        "attempts": 0,
-        "retries": 0,
-        "token_counts": 0,
-        "usage": Usage(),
-        "models": set(),
-    }
+    totals = new_totals()
     tree_sha = tree_digest(files)
     trace.start(
         {
@@ -317,81 +490,48 @@ def run_baseline(
         }
     )
 
-    proposal: PatchProposal | None = None
+    attempt: Attempt | None = None
     patched: dict[str, bytes] | None = None
-    diff = ""
-    violations: tuple[str, ...] = ()
-    verification: Verification | None = None
     try:
         message = build_task_message(
             bug,
             source_roots=tuple(source_roots),
             test_targets=tuple(target for command in commands for target in command.targets),
         )
-        proposal = _explore_and_propose(model, tools, message, limits, budget, trace, totals)
-        try:
-            candidate = apply_proposal(files, proposal)
-        except PatchError as error:
-            raise _Stop(RunStatus.INVALID_PROPOSAL, f"{error.code}: {error}") from None
-        diff = unified_diff(files, candidate)
-        violations = check_policy(files, proposal, candidate, limits.policy)
-        if violations:
-            raise _Stop(RunStatus.REJECTED_POLICY, "; ".join(violations))
-        patched = candidate
-        verification = verify_patch(
+        messages: list[dict[str, Any]] = [{"role": "user", "content": message}]
+        proposal = _explore_and_propose(model, tools, messages, limits, budget, trace, totals)
+        attempt, patched = evaluate_proposal(
             files,
-            patched,
             proposal,
+            limits=limits,
             commands=commands,
-            limits=sandbox_limits,
+            sandbox_limits=sandbox_limits,
             source_roots=source_roots,
             sandbox=sandbox,
         )
-        if verification.infrastructure_failure:
-            raise _Stop(RunStatus.FAILED_INFRASTRUCTURE, verification.reason)
-        status = RunStatus.CANDIDATE_VERIFIED if verification.verified else RunStatus.UNVERIFIED
-        detail = verification.reason
+        status, detail = attempt.status, attempt.detail
     except _Stop as stop:
         status, detail = stop.status, stop.detail
 
-    trace.finish(status.value, detail, diff)
-    changed = (
-        tuple(sorted(path for path in patched if patched[path] != files.get(path)))
-        if patched is not None
-        else ()
-    )
-    record = RunRecord(
+    trace.finish(status.value, detail, attempt.diff if attempt else "")
+    record = build_record(
         run_id=run_id,
         task_id=task_id,
+        mode="baseline",
         status=status,
         detail=detail,
         started_at=started_at,
         duration_seconds=time.monotonic() - started,
-        model_turns=totals["turns"],
-        generation_attempts=totals["attempts"],
-        retries=totals["retries"],
-        token_count_requests=totals["token_counts"],
+        totals=totals,
         tool_calls=tool_budget.calls,
-        usage=totals["usage"],
         cost_micro_usd=budget.spent,
-        proposal=proposal,
-        diff=diff,
-        changed_files=changed,
-        policy_violations=violations,
-        verification=verification,
-        manifest=Manifest(
-            runner_version=__version__,
-            provider=limits.provider,
-            model_requested=limits.model,
-            models_reported=tuple(sorted(totals["models"])),
-            effort=limits.effort,
-            prompt_sha256=prompt_hash(),
-            config_sha256=limits.digest(),
-            repository_tree_sha256=tree_sha,
-            repository_commit=repository_commit,
-            sandbox_image_id=verification.image_id if verification else None,
-            run_cap_usd=run_cap_usd,
-            limits=limits,
-        ),
+        last=attempt,
+        attempts=(),
+        limits=limits,
+        prompt_sha256=prompt_hash(),
+        config_sha256=limits.digest(),
+        repository_tree_sha256=tree_sha,
+        repository_commit=repository_commit,
+        run_cap_usd=run_cap_usd,
     )
     return record, patched

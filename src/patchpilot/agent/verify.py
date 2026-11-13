@@ -7,9 +7,11 @@ under test (see docs/grading-integrity.md). Only the evaluator, with hidden
 tests, decides ``resolved``.
 """
 
+import re
 from collections.abc import Mapping, Sequence
 
 from patchpilot.agent.proposal import PatchProposal
+from patchpilot.intake.text import UntrustedText
 from patchpilot.sandbox.models import (
     CaseOutcome,
     Counts,
@@ -23,6 +25,12 @@ from patchpilot.sandbox.models import (
 
 _LIMIT_STATUSES = (SandboxStatus.TIMEOUT, SandboxStatus.OUT_OF_MEMORY)
 _UNSUCCESSFUL = (CaseOutcome.FAILED, CaseOutcome.ERROR)
+_MAX_FAILED_CASES = 5
+_MAX_NODE_CHARS = 200
+_MAX_FAILURE_CHARS = 800
+# Object addresses differ on every run. Left in, they would make the feedback
+# of a repair run, and so its replay, different each time.
+_ADDRESS = re.compile(r"\b0x[0-9a-fA-F]{4,}\b")
 
 
 class VerificationStep(FrozenModel):
@@ -34,12 +42,26 @@ class VerificationStep(FrozenModel):
     duration_seconds: float
 
 
+class FailedCase(FrozenModel):
+    """One failing test of the step that did not hold.
+
+    These come only from tests the agent can see: the repository's own tests
+    and the regression tests it wrote. Hidden tests are never run here. The
+    message is test output, written by the code under test: untrusted.
+    """
+
+    node_id: str
+    message: UntrustedText
+
+
 class Verification(FrozenModel):
     steps: tuple[VerificationStep, ...]
     verified: bool
     infrastructure_failure: bool
     reason: str
     image_id: str | None = None
+    # A bounded sample, for feedback to the model in a repair run.
+    failures: tuple[FailedCase, ...] = ()
 
 
 def verify_patch(
@@ -141,6 +163,18 @@ def verify_patch(
             infrastructure_failure=result.is_infrastructure_error,
             reason=reason,
             image_id=image_id,
+            failures=tuple(
+                FailedCase(
+                    node_id=case.node_id[:_MAX_NODE_CHARS],
+                    message=UntrustedText(
+                        untrusted_value=_ADDRESS.sub("0x...", case.message)[:_MAX_FAILURE_CHARS]
+                    ),
+                )
+                for case in result.cases
+                if case.outcome in _UNSUCCESSFUL
+            )[:_MAX_FAILED_CASES]
+            if wanted is SandboxStatus.PASSED
+            else (),
         )
     return Verification(
         steps=tuple(steps),

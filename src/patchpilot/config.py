@@ -38,7 +38,9 @@ class Settings(BaseSettings):
         default=False,
         description="Paid model calls are made only when this is explicitly enabled.",
     )
-    max_attempts: int = Field(default=3, ge=1, le=10)
+    max_attempts: int = Field(
+        default=3, ge=1, le=5, description="Proposals a repair run may make. Five at most."
+    )
     max_cost_usd: float = Field(
         default=5.0,
         gt=0,
