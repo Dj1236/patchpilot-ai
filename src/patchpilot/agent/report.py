@@ -85,11 +85,17 @@ def public_report(record: RunRecord, resolved: bool | None = None) -> str:
         lines.append(f"- **Independent grading (hidden tests):** {outcome}")
     lines += [
         f"- **Model turns:** {record.model_turns}, **tool calls:** {record.tool_calls}",
-        f"- **Tokens:** {record.usage.input_tokens} input, {record.usage.output_tokens} output, "
+        f"- **Generation attempts:** {record.generation_attempts}, of which "
+        f"{record.retries} were retries; **token-count requests:** "
+        f"{record.token_count_requests}",
+        f"- **Tokens (reported by the provider):** {record.usage.input_tokens} input, "
+        f"{record.usage.output_tokens} output, "
         f"{record.usage.cache_read_input_tokens} cache read, "
         f"{record.usage.cache_creation_input_tokens} cache write",
         f"- **Cost:** ${usd(record.cost_micro_usd):.4f} of a ${manifest.run_cap_usd:.2f} run cap"
         + _FREE_TIER_NOTE.get(manifest.provider, ""),
+        "- The cost is the internal ledger's figure, not a bill: a failed request is "
+        "charged its full reservation, because it may have been billed.",
         f"- **Duration:** {record.duration_seconds:.1f} s",
         "",
     ]

@@ -36,6 +36,7 @@ PreflightFailure = Literal[
     "rate_limited",
     "quota_exhausted",
     "not_configured",
+    "unavailable",
     "connection",
     "provider_error",
 ]
@@ -207,6 +208,7 @@ def _gemini_failure(error: Exception, during: str) -> PreflightError:
         "rate_limited": "rate_limited",
         "quota_exhausted": "quota_exhausted",
         "not_configured": "not_configured",
+        "unavailable": "unavailable",
         "connection": "connection",
         "timeout": "connection",
     }

@@ -151,6 +151,10 @@ The adapter uses the official `google-genai` SDK and the Interactions API.
 - **Token counting is separate.** It is free at the provider and has its own
   limits, so it is neither paced nor counted as an attempt. It is still made
   before every reservation.
+- **Provider unavailable.** An HTTP 5xx answer is reported as `unavailable`,
+  separately from `connection` (the provider could not be reached at all).
+  It is waited on for 30 s before the single retry. The retry count is
+  unchanged, and both attempts count toward the limit of 8.
 - **Provider limits.** If a per-minute limit is hit anyway, it is waited out
   once (60 s) before the single retry. A spent daily quota ends the run as
   `failed_infrastructure` with `quota_exhausted`; it resets at midnight
@@ -175,6 +179,20 @@ Compatibility limits, all unverified until a live run:
   refusal.
 - Effort `xhigh` and `max` are not offered by this model and are refused.
 - To replay a Gemini trace, set `PATCHPILOT_PROVIDER=gemini`.
+
+## Reading the numbers in a report
+
+- **Model turns** are generation requests that returned an answer.
+- **Generation attempts** are all requests sent to the generation endpoint,
+  failed ones included. **Retries** are the attempts that repeated a failed
+  request. **Token-count requests** go to a separate, free endpoint.
+- **Tokens** are what the provider reported for answered requests.
+- **Cost** is the internal ledger's figure, not provider usage and not a
+  bill. A failed request is charged its full reservation, so a run with no
+  answer can show a cost with zero tokens. On the free tier nothing is
+  charged by the provider. Ledger records are never refunded or rewritten.
+- A failed model request shows the provider's HTTP status and short error
+  code, never its message text.
 
 ## Traces, reports and replay
 
