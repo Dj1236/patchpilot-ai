@@ -11,6 +11,7 @@ from collections.abc import Mapping, Sequence
 
 from patchpilot.agent.proposal import PatchProposal
 from patchpilot.sandbox.models import (
+    CaseOutcome,
     Counts,
     FrozenModel,
     PytestCommand,
@@ -21,6 +22,7 @@ from patchpilot.sandbox.models import (
 )
 
 _LIMIT_STATUSES = (SandboxStatus.TIMEOUT, SandboxStatus.OUT_OF_MEMORY)
+_UNSUCCESSFUL = (CaseOutcome.FAILED, CaseOutcome.ERROR)
 
 
 class VerificationStep(FrozenModel):
@@ -89,11 +91,28 @@ def verify_patch(
 
     steps: list[VerificationStep] = []
     image_id: str | None = None
-    for name, expected, files, command, wanted in plan:
+    failing_before: set[str] = set()
+    for index, (name, expected, files, command, wanted) in enumerate(plan):
         result: SandboxResult = sandbox.run(files, command, limits, source_roots=source_roots)
         if result.metadata is not None:
             image_id = result.metadata.image_id
         ok = result.status is wanted and result.report_is_consistent
+        problem: str | None = None
+        outcomes = result.outcomes()
+        if ok and index == 0:
+            failing_before = {
+                node for node, outcome in outcomes.items() if outcome in _UNSUCCESSFUL
+            }
+            if not failing_before:
+                ok, problem = False, f"{name}: no individual test was reported as failing"
+        elif ok and index == 1:
+            # The very tests that failed before must now pass. A test that is
+            # skipped, renamed or missing after the patch proves nothing.
+            unproven = sorted(
+                node for node in failing_before if outcomes.get(node) is not CaseOutcome.PASSED
+            )
+            if unproven:
+                ok, problem = False, f"{name}: a test that failed before did not pass after"
         steps.append(
             VerificationStep(
                 name=name,
@@ -106,7 +125,9 @@ def verify_patch(
         )
         if ok:
             continue
-        if result.is_infrastructure_error:
+        if problem is not None:
+            reason = problem
+        elif result.is_infrastructure_error:
             reason = f"the sandbox failed during: {name}"
         elif result.status in _LIMIT_STATUSES:
             reason = f"{name}: stopped by a limit ({result.status.value})"
