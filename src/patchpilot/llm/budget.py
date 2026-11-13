@@ -124,8 +124,17 @@ class SpendLedger:
             return []
         records = []
         for line in self._path.read_text().splitlines():
-            if line.strip():
-                records.append(json.loads(line))
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+                int(str(record["micro_usd"])), str(record["id"])
+            except (ValueError, KeyError, TypeError):
+                # Spend that cannot be counted must not be added to.
+                raise BudgetExceededError(
+                    f"the spend ledger {self._path} is unreadable; refusing to spend"
+                ) from None
+            records.append(record)
         return records
 
     def _append(self, record: dict[str, object]) -> None:
