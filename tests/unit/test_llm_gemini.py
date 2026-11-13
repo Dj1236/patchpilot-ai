@@ -19,7 +19,17 @@ from patchpilot.llm.base import ModelError, ModelRequest, Usage
 from patchpilot.llm.budget import RunBudget, SpendLedger
 from patchpilot.llm.gemini_client import connect, padded
 from patchpilot.sandbox.models import SandboxLimits
-from tests.gemini_wire import MODEL, Reply, Wire, answer, api_error, call, interaction, thought
+from tests.gemini_wire import (
+    MODEL,
+    FakeClock,
+    Reply,
+    Wire,
+    answer,
+    api_error,
+    call,
+    interaction,
+    thought,
+)
 from tests.unit.test_baseline import BUG, COMMANDS, FILES, GOOD_SANDBOX, ScriptedSandbox, proposal
 
 SECRET = "patchpilot-gemini-canary-not-a-real-key"
@@ -378,3 +388,141 @@ def test_the_baseline_runs_unchanged_and_its_trace_replays(tmp_path: Path) -> No
     assert (replayed.status, replayed.diff) == (record.status, record.diff)
     report = public_report(record)
     assert "Provider: `gemini`" in report and "list-price upper bound" in report
+
+
+# -- free-tier pacing and the attempt limit -------------------------------------------------
+
+LIMITED = api_error(429, "rate_limit_exceeded")
+
+
+def _answers(count: int) -> list[Reply]:
+    return [interaction(answer("{}")) for _ in range(count)]
+
+
+def test_generation_is_paced_to_four_requests_in_any_sixty_seconds() -> None:
+    clock, wire = FakeClock(), Wire(_answers(8))
+    model = wire.model(clock.limiter())
+    sent_at: list[float] = []
+
+    for _ in range(8):
+        model.complete(request())
+        sent_at.append(clock.now)
+
+    assert clock.sleeps == [60.0], "the fifth request waits for the first to leave the window"
+    assert sent_at == [0.0] * 4 + [60.0] * 4
+    for start in sent_at:
+        assert sum(start <= moment < start + 60.0 for moment in sent_at) <= 4
+
+
+def test_requests_that_are_already_spread_out_are_not_delayed() -> None:
+    clock, wire = FakeClock(), Wire(_answers(8))
+    model = wire.model(clock.limiter())
+
+    for _ in range(8):
+        model.complete(request())
+        clock.now += 15.0
+
+    assert clock.sleeps == []
+
+
+def test_a_partly_elapsed_window_is_waited_out_only_for_the_remainder() -> None:
+    clock, wire = FakeClock(), Wire(_answers(5))
+    model = wire.model(clock.limiter())
+
+    for _ in range(4):
+        model.complete(request())
+        clock.now += 10.0
+    model.complete(request())
+
+    assert clock.sleeps == [20.0]
+
+
+def test_no_more_than_eight_generation_attempts_are_made_and_failures_count() -> None:
+    clock = FakeClock()
+    wire = Wire([LIMITED, *_answers(2), LIMITED, LIMITED, *_answers(3), *_answers(2)])
+    model = wire.model(clock.limiter())
+    outcomes: list[str] = []
+
+    for _ in range(10):
+        try:
+            outcomes.append(model.complete(request()).stop_reason)
+        except ModelError as error:
+            outcomes.append(error.kind)
+
+    assert outcomes[:8].count("rate_limited") == 3 and outcomes[8:] == ["attempt_limit"] * 2
+    assert model.limiter.attempts == 8 and len(wire.sent) == 8, "retries are attempts too"
+
+
+def test_sizing_is_neither_paced_nor_counted_and_stops_once_attempts_are_gone() -> None:
+    clock, wire = FakeClock(), Wire(_answers(2))
+    model = wire.model(clock.limiter(max_attempts=2))
+
+    for _ in range(10):
+        model.count_input_tokens(request())
+    assert (model.count_requests, model.limiter.attempts, clock.sleeps) == (10, 0, [])
+
+    model.complete(request())
+    model.complete(request())
+    with pytest.raises(ModelError) as caught:
+        model.count_input_tokens(request())
+
+    assert caught.value.kind == "attempt_limit"
+    assert len(wire.counted) == 10, "no count request is made for a run that cannot continue"
+
+
+def _endless() -> list[Reply]:
+    return [interaction(thought(), call(f"call-{index}", "list_files", {})) for index in range(20)]
+
+
+def test_a_run_that_needs_a_ninth_attempt_stops_with_nothing_more_reserved(
+    tmp_path: Path,
+) -> None:
+    clock, wire = FakeClock(), Wire(_endless())
+    ledger = SpendLedger(tmp_path / "ledger.jsonl", cap_usd=5.0)
+
+    record = _run(wire.model(clock.limiter()), tmp_path / "run", ledger, "run")
+
+    assert record.status is RunStatus.FAILED_INFRASTRUCTURE and "attempt_limit" in record.detail
+    assert record.model_turns == 8 and len(wire.sent) == 8 and len(wire.counted) == 8
+    assert clock.sleeps == [60.0]
+    assert ledger.committed() == record.cost_micro_usd, "the refused ninth attempt cost nothing"
+    assert record.cost_micro_usd < 750_000
+
+
+def test_a_rate_limited_turn_is_retried_once_and_both_attempts_are_counted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    waits: list[float] = []
+    monkeypatch.setattr("patchpilot.agent.baseline.time.sleep", waits.append)
+    clock, wire = FakeClock(), Wire([LIMITED, interaction(answer(proposal()))])
+    model = wire.model(clock.limiter())
+
+    record = _run(model, tmp_path / "run", SpendLedger(tmp_path / "ledger.jsonl", 5.0), "run")
+
+    assert record.status is RunStatus.CANDIDATE_VERIFIED and waits == [60.0]
+    assert (model.limiter.attempts, model.count_requests, len(wire.sent)) == (2, 2, 2)
+
+
+@pytest.mark.parametrize("reply", [api_error(429, "quota_exceeded"), (429, DAILY)])
+def test_a_spent_daily_quota_ends_the_run_after_one_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reply: Reply
+) -> None:
+    monkeypatch.setattr(
+        "patchpilot.agent.baseline.time.sleep", lambda _: pytest.fail("a spent quota was waited on")
+    )
+    clock, wire = FakeClock(), Wire([reply, interaction(answer(proposal()))])
+    model = wire.model(clock.limiter())
+
+    record = _run(model, tmp_path / "run", SpendLedger(tmp_path / "ledger.jsonl", 5.0), "run")
+
+    assert record.status is RunStatus.FAILED_INFRASTRUCTURE and "quota_exhausted" in record.detail
+    assert model.limiter.attempts == 1 and len(wire.sent) == 1
+    assert record.manifest.models_reported == (), "no other model was tried"
+
+
+def test_the_live_client_is_built_with_the_pilot_limits() -> None:
+    from patchpilot.llm.gemini_client import GenerationLimiter
+
+    limiter = GenerationLimiter()
+
+    assert (limiter._per_window, limiter._window, limiter._max_attempts) == (4, 60.0, 8)

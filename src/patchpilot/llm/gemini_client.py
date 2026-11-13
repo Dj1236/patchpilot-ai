@@ -27,6 +27,9 @@ module translates them, so the agent loop is the same for every provider.
 import json
 import os
 import re
+import time
+from collections import deque
+from collections.abc import Callable
 from typing import Any
 
 from patchpilot.llm.base import ModelError, ModelRequest, ModelTurn, StopReason, ToolCall, Usage
@@ -182,13 +185,72 @@ def padded(tokens: int) -> int:
     return int(tokens * _COUNT_MARGIN) + _COUNT_PADDING
 
 
+class GenerationLimiter:
+    """Paces generation requests and caps how many one process may attempt.
+
+    Every attempt counts, retries included, whether or not it succeeds. Token
+    counting is free at the provider and has separate limits, so it is
+    neither paced nor counted here.
+
+    The defaults are the first pilot's: 4 requests in any 60 seconds, under
+    the free tier's 5 per minute, and 8 attempts in all. Raise them only
+    when a larger run is authorized.
+    """
+
+    def __init__(
+        self,
+        *,
+        per_window: int = 4,
+        window_seconds: float = 60.0,
+        max_attempts: int = 8,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._per_window = per_window
+        self._window = window_seconds
+        self._max_attempts = max_attempts
+        self._clock = clock
+        self._sleep = sleep
+        self._sent: deque[float] = deque()
+        self.attempts = 0
+
+    def check(self) -> None:
+        """Raise if no generation attempt is left. Nothing is sent or reserved."""
+        if self.attempts >= self._max_attempts:
+            raise ModelError(
+                "attempt_limit",
+                f"the limit of {self._max_attempts} generation attempts is used up",
+            )
+
+    def acquire(self) -> None:
+        """Count one attempt, first waiting until the rolling window has room."""
+        self.check()
+        now = self._clock()
+        if len(self._sent) >= self._per_window:
+            wait = self._sent[0] + self._window - now
+            if wait > 0:
+                self._sleep(wait)
+                now = self._clock()
+            self._sent.popleft()
+        self._sent.append(now)
+        self.attempts += 1
+
+
 class GeminiModel:
     """A ``ModelClient`` backed by the Gemini Interactions API."""
 
-    def __init__(self, client: Any | None = None, *, timeout_seconds: float = 300.0) -> None:
+    def __init__(
+        self,
+        client: Any | None = None,
+        *,
+        timeout_seconds: float = 300.0,
+        limiter: GenerationLimiter | None = None,
+    ) -> None:
         # Credentials come from the environment. They are never read, stored
         # or logged by PatchPilot.
         self._client = connect(timeout_seconds) if client is None else client
+        self.limiter = limiter or GenerationLimiter()
+        self.count_requests = 0
 
     @staticmethod
     def _arguments(request: ModelRequest) -> dict[str, Any]:
@@ -240,6 +302,10 @@ class GeminiModel:
 
     def count_input_tokens(self, request: ModelRequest) -> int:
         """Estimate the input tokens of the request, plus a safety margin."""
+        # Sizing comes before the reservation, so a run that is out of
+        # attempts stops here with nothing reserved and nothing sent.
+        self.limiter.check()
+        self.count_requests += 1
         try:
             counted = self._client.models.count_tokens(
                 model=request.model, contents=self.flattened(request)
@@ -249,6 +315,7 @@ class GeminiModel:
             raise failure(error) from None
 
     def complete(self, request: ModelRequest) -> ModelTurn:
+        self.limiter.acquire()
         try:
             response = self._client.interactions.create(
                 automatic_continuation=False, **self._arguments(request)

@@ -30,7 +30,8 @@ No decision is open. Each live run still needs its own go-ahead.
 | Provider and model | `gemini`, `gemini-3.8-flash`, free tier. No fallback |
 | Effort | thinking level `medium` |
 | Output limit | 16,000 tokens per request |
-| Limits per run | 20 model turns, 60 tool calls |
+| Limits per run | 8 generation attempts in all, retries included; 60 tool calls |
+| Pacing | At most 4 generation requests in any 60 s (project limit: 5 per minute, 20 per day) |
 | Retries | SDK retries off; at most 2 attempts per request, each budgeted; one 60 s wait after a rate limit |
 | Server state | None: `store` off, no automatic continuation |
 | Caps | 0.75 USD per run, 5 USD total, at list price, enforced by `runs/ledger.jsonl`. Expected real charge: zero |

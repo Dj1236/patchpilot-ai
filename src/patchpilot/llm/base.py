@@ -15,7 +15,13 @@ from patchpilot.sandbox.models import FrozenModel
 
 StopReason = Literal["end_turn", "tool_use", "max_tokens", "refusal", "other"]
 ErrorKind = Literal[
-    "timeout", "rate_limited", "quota_exhausted", "not_configured", "connection", "api_error"
+    "timeout",
+    "rate_limited",
+    "quota_exhausted",
+    "attempt_limit",
+    "not_configured",
+    "connection",
+    "api_error",
 ]
 Provider = Literal["anthropic", "gemini"]
 

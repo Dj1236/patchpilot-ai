@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from patchpilot.llm.gemini_client import GeminiModel, connect
+from patchpilot.llm.gemini_client import GeminiModel, GenerationLimiter, connect
 
 MODEL = "gemini-3.8-flash"
 # A reply is an interaction body, an (HTTP status, body) pair, or an error to raise.
@@ -104,5 +104,23 @@ class Wire:
         """The real SDK client, built by the production code, answered locally."""
         return connect(5.0, httpx_client=httpx.Client(transport=httpx.MockTransport(self)))
 
-    def model(self) -> GeminiModel:
-        return GeminiModel(self.client())
+    def model(self, limiter: GenerationLimiter | None = None) -> GeminiModel:
+        return GeminiModel(self.client(), limiter=limiter)
+
+
+class FakeClock:
+    """A clock the test moves. Sleeping advances it and is recorded."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def __call__(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    def limiter(self, **limits: Any) -> GenerationLimiter:
+        return GenerationLimiter(clock=self, sleep=self.sleep, **limits)

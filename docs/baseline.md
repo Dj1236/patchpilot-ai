@@ -139,9 +139,22 @@ The adapter uses the official `google-genai` SDK and the Interactions API.
   price (rounded up), so the caps bound what a run could cost if billing
   were enabled. Reports label this amount as an upper bound, not as money
   spent.
-- **Limits.** A per-minute limit is waited out once (60 s) before the single
-  retry. A spent daily quota ends the run as `failed_infrastructure` with
-  `quota_exhausted`; it resets at midnight Pacific time.
+- **Pacing.** Generation requests are held to 4 in any rolling 60 seconds,
+  under the free tier's 5 per minute. The fifth waits for the oldest to
+  leave the window.
+- **Attempt limit.** One process makes at most 8 generation attempts. Every
+  attempt counts, retries and failures included. A run that needs a ninth
+  stops as `failed_infrastructure` with `attempt_limit`, before anything
+  more is counted, reserved or sent. The model is not told about this
+  limit. Both numbers are the first pilot's and are fixed in
+  `GenerationLimiter`.
+- **Token counting is separate.** It is free at the provider and has its own
+  limits, so it is neither paced nor counted as an attempt. It is still made
+  before every reservation.
+- **Provider limits.** If a per-minute limit is hit anyway, it is waited out
+  once (60 s) before the single retry. A spent daily quota ends the run as
+  `failed_infrastructure` with `quota_exhausted`; it resets at midnight
+  Pacific time. Neither ever changes the model, the provider or the tier.
 - **Data use.** On the free tier Google may use prompts and responses to
   improve its products. Send only synthetic or approved public code.
 
