@@ -375,6 +375,26 @@ def test_failed_requests_are_retried_a_bounded_number_of_times_and_charged(
     assert no_retry.status is RunStatus.FAILED_INFRASTRUCTURE and len(rejected.requests) == 1
 
 
+def test_a_rate_limit_is_waited_out_once_and_a_spent_quota_is_not_retried(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    waits: list[float] = []
+    monkeypatch.setattr("patchpilot.agent.baseline.time.sleep", waits.append)
+    limited = ModelError("rate_limited", "429", retry_after_seconds=600.0)
+
+    recovered, model, _, _ = harness.run([limited, final_turn(proposal())])
+    gave_up, failing, _, _ = harness.run([limited] * 5)
+    spent, exhausted, _, _ = harness.run(
+        [ModelError("quota_exhausted", "daily quota"), final_turn(proposal())]
+    )
+
+    assert recovered.status is RunStatus.CANDIDATE_VERIFIED and len(model.requests) == 2
+    assert gave_up.status is RunStatus.FAILED_INFRASTRUCTURE and len(failing.requests) == 2
+    assert waits == [60.0, 60.0], "one bounded wait before each retry, none after the last"
+    assert spent.status is RunStatus.FAILED_INFRASTRUCTURE and len(exhausted.requests) == 1
+    assert "quota_exhausted" in spent.detail
+
+
 # -- prompts, traces and replay -----------------------------------------------------------
 
 

@@ -10,6 +10,8 @@ from pathlib import Path
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from patchpilot.llm.base import Provider
+
 
 class Settings(BaseSettings):
     """Run-wide limits and model selection."""
@@ -17,6 +19,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PATCHPILOT_", frozen=True, extra="forbid")
 
     model_id: str = Field(default="claude-sonnet-5-5", min_length=1)
+    provider: Provider = Field(
+        default="anthropic",
+        description="Model provider. Each provider has exactly one pinned model.",
+    )
+    gemini_free_tier_confirmed: bool = Field(
+        default=False,
+        description=(
+            "The owner's statement that the Gemini key belongs to a project with no "
+            "billing account. Code cannot check this, so live Gemini runs need it."
+        ),
+    )
     live: bool = Field(
         default=False,
         description="Paid model calls are made only when this is explicitly enabled.",

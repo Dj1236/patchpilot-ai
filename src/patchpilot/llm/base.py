@@ -1,8 +1,10 @@
 """The provider-neutral shape of one model turn.
 
-Messages and content blocks are kept as plain dictionaries in the provider's
-wire format. That matters for tool use: the blocks of an assistant turn,
-including thinking blocks, must be sent back exactly as they were received.
+Messages and content blocks are kept as plain dictionaries. The blocks of an
+assistant turn are in the provider's wire format and must be sent back
+exactly as they were received, thinking blocks and signatures included. The
+agent writes its own messages (the task and the tool results) in the shape
+of the first provider; an adapter for another provider translates them.
 """
 
 from typing import Any, Literal, Protocol
@@ -12,7 +14,17 @@ from pydantic import Field
 from patchpilot.sandbox.models import FrozenModel
 
 StopReason = Literal["end_turn", "tool_use", "max_tokens", "refusal", "other"]
-ErrorKind = Literal["timeout", "rate_limited", "connection", "api_error"]
+ErrorKind = Literal[
+    "timeout", "rate_limited", "quota_exhausted", "not_configured", "connection", "api_error"
+]
+Provider = Literal["anthropic", "gemini"]
+
+# One pinned model per provider. There is no fallback list: a run uses this
+# model or it stops.
+PINNED_MODELS: dict[Provider, str] = {
+    "anthropic": "claude-sonnet-5-5",
+    "gemini": "gemini-3.8-flash",
+}
 
 
 class ToolSpec(FrozenModel):
@@ -70,9 +82,12 @@ class ModelTurn(FrozenModel):
 class ModelError(Exception):
     """A request failed. It may still have been billed."""
 
-    def __init__(self, kind: ErrorKind, message: str) -> None:
+    def __init__(self, kind: ErrorKind, message: str, *, retry_after_seconds: float = 0.0) -> None:
         super().__init__(message)
         self.kind = kind
+        # How long to wait before the one retry, when the provider's limit
+        # window makes an immediate retry pointless.
+        self.retry_after_seconds = retry_after_seconds
 
 
 class ModelClient(Protocol):

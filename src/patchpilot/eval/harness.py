@@ -145,6 +145,12 @@ def evaluate(
 def summary_table(summary: EvalSummary) -> str:
     """Return the results as Markdown. Counts, not percentages: the task set is small."""
     total = len(summary.runs)
+    models = sorted(
+        {
+            f"{run.record.manifest.provider}/{run.record.manifest.model_requested}"
+            for run in summary.runs
+        }
+    )
     lines = [
         f"# Evaluation: {summary.mode}",
         "",
@@ -172,6 +178,8 @@ def summary_table(summary: EvalSummary) -> str:
         f"- Proposals that could not be applied: {summary.count(RunStatus.INVALID_PROPOSAL)}",
         f"- Rejected by patch policy: {summary.count(RunStatus.REJECTED_POLICY)}",
         f"- Total cost: ${usd(summary.cost_micro_usd):.4f}",
+        f"- Provider and model: {', '.join(models) or 'none'}. Results from different "
+        "models are different experiments and must not be pooled.",
         "",
     ]
     return "\n".join(lines)

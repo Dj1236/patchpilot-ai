@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from patchpilot import __version__
 from patchpilot.agent.prompts import (
@@ -33,7 +33,15 @@ from patchpilot.agent.prompts import (
 from patchpilot.agent.proposal import PROPOSAL_SCHEMA, PatchProposal, ProposalError, parse_proposal
 from patchpilot.agent.trace import TraceWriter
 from patchpilot.agent.verify import Verification, verify_patch
-from patchpilot.llm.base import ModelClient, ModelError, ModelRequest, ModelTurn, Usage
+from patchpilot.llm.base import (
+    PINNED_MODELS,
+    ModelClient,
+    ModelError,
+    ModelRequest,
+    ModelTurn,
+    Provider,
+    Usage,
+)
 from patchpilot.llm.budget import BudgetExceededError, RunBudget, UnknownModelPriceError
 from patchpilot.patch.apply import PatchError, apply_proposal, unified_diff
 from patchpilot.patch.policy import PolicyLimits, check_policy
@@ -43,6 +51,7 @@ from patchpilot.sandbox.models import FrozenModel, PytestCommand, SandboxLimits,
 from patchpilot.sandbox.tree import tree_digest
 
 _RETRYABLE = ("timeout", "rate_limited", "connection")
+_MAX_RETRY_WAIT_SECONDS = 60.0
 
 
 class RunStatus(StrEnum):
@@ -58,6 +67,7 @@ class RunStatus(StrEnum):
 class RunLimits(FrozenModel):
     """Bounds on one run. Changing any of them changes the configuration hash."""
 
+    provider: Provider = "anthropic"
     model: str = "claude-sonnet-5-5"
     effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     max_turns: int = Field(default=20, ge=1, le=100)
@@ -68,6 +78,19 @@ class RunLimits(FrozenModel):
     max_tool_call_output_bytes: int = Field(default=32_000, ge=500)
     policy: PolicyLimits = PolicyLimits()
 
+    @model_validator(mode="after")
+    def _only_the_pinned_model(self) -> "RunLimits":
+        if self.model != PINNED_MODELS[self.provider]:
+            raise ValueError(
+                f"provider {self.provider!r} runs only {PINNED_MODELS[self.provider]!r}, "
+                f"not {self.model!r}"
+            )
+        return self
+
+    @classmethod
+    def for_provider(cls, provider: Provider) -> "RunLimits":
+        return cls(provider=provider, model=PINNED_MODELS[provider])
+
     def digest(self) -> str:
         return hashlib.sha256(self.model_dump_json().encode()).hexdigest()
 
@@ -76,6 +99,7 @@ class Manifest(FrozenModel):
     """What is needed to identify and reproduce a run."""
 
     runner_version: str
+    provider: str
     model_requested: str
     models_reported: tuple[str, ...]
     effort: str
@@ -130,7 +154,7 @@ def _send(
     """
     trace.request(index, request)
     last: ModelError | None = None
-    for _ in range(attempts):
+    for attempt in range(attempts):
         try:
             reservation = budget.reserve(
                 request.model, model.count_input_tokens(request), request.max_tokens
@@ -150,6 +174,9 @@ def _send(
             trace.error(index, error)
             last = error
             if error.kind in _RETRYABLE:
+                if attempt + 1 < attempts and error.retry_after_seconds > 0:
+                    # A rate limit window has to pass before a retry can succeed.
+                    time.sleep(min(error.retry_after_seconds, _MAX_RETRY_WAIT_SECONDS))
                 continue
             break
         budget.settle(reservation, request.model, turn.usage)
@@ -327,6 +354,7 @@ def run_baseline(
         verification=verification,
         manifest=Manifest(
             runner_version=__version__,
+            provider=limits.provider,
             model_requested=limits.model,
             models_reported=tuple(sorted(totals["models"])),
             effort=limits.effort,
