@@ -6,8 +6,13 @@ anything back to it.
 
 from collections.abc import Mapping
 
-from patchpilot.sandbox.docker import DockerSandbox
-from patchpilot.sandbox.models import CaseOutcome, FrozenModel, SandboxResult, SandboxStatus
+from patchpilot.sandbox.models import (
+    CaseOutcome,
+    FrozenModel,
+    SandboxResult,
+    SandboxRunner,
+    SandboxStatus,
+)
 from patchpilot.tasks.loader import LoadedTask
 from patchpilot.tasks.schema import Evaluation
 
@@ -88,7 +93,7 @@ def grade(
 
 
 def grade_candidate(
-    loaded: LoadedTask, candidate: Mapping[str, bytes], sandbox: DockerSandbox
+    loaded: LoadedTask, candidate: Mapping[str, bytes], sandbox: SandboxRunner
 ) -> tuple[Grade, SandboxResult]:
     """Run the hidden tests against ``candidate`` in a fresh sandbox and grade it."""
     task = loaded.task
@@ -102,7 +107,7 @@ def grade_candidate(
     return grade(result, task.evaluation, tampered=tree.tampered, ignored=tree.ignored), result
 
 
-def verify_fixture(loaded: LoadedTask, sandbox: DockerSandbox) -> FixtureReport:
+def verify_fixture(loaded: LoadedTask, sandbox: SandboxRunner) -> FixtureReport:
     """Check that a task is a valid benchmark item.
 
     1. The visible tests pass on the starting state.

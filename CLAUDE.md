@@ -6,8 +6,9 @@ before changing behavior.
 
 ## Current state
 
-Milestones 2 (foundation), 3 (sandbox and task format) and 4 (issue intake
-and repository tools) are built and verified locally. GitHub Actions cannot start on this account, so no CI gate
+Milestones 2 to 4 and the Milestone 5 baseline agent (steps 1 to 11) are built
+and verified locally. No live model call has been made; the live pilot needs
+the owner's separate authorization. GitHub Actions cannot start on this account, so no CI gate
 has passed; see `docs/ci-status.md` and never describe CI as green. Each
 later milestone needs the owner's explicit authorization before work starts.
 See the milestone table in `docs/spec.md`.
@@ -34,6 +35,12 @@ uv run patchpilot version
 - `src/patchpilot/tasks/`: evaluation task schema, loader and grading.
 - `src/patchpilot/intake/`: issue URL validation, allowlist, read-only GitHub
   client, untrusted-text handling, intake pipeline.
+- `src/patchpilot/llm/`: provider interface, scripted fake model, spend
+  ledger, Anthropic client.
+- `src/patchpilot/agent/`: prompts, proposal format, baseline pipeline,
+  sandbox verification, traces, reports.
+- `src/patchpilot/patch/`: safe edit application, diff, patch policy.
+- `src/patchpilot/eval/`: evaluation harness.
 - `src/patchpilot/repo/`: hardened git fetch without checkout, in-memory
   snapshot, read-only tools with budgets.
 - `evals/tasks/`: evaluation tasks. `repo/` is agent-visible; `internal/`
@@ -42,13 +49,19 @@ uv run patchpilot version
 - `tests/unit/`: tests that need no network, Docker or model.
 - `tests/integration/`: tests that run real containers (marker `sandbox`).
 - `docs/`: specification, threat model, decision records, sandbox, intake,
-  evaluation tasks, grading integrity, CI status, dependency licenses.
+  baseline agent, evaluation tasks, grading integrity, CI status, licenses.
 
 ## Rules that must not be broken
 
 - **No paid model calls without authorization.** Tests use the scripted
-  fake model. Live calls require the explicit live setting and the owner's
-  go-ahead.
+  fake model. Never pass `--live`, set an API key or construct
+  `AnthropicModel()` for a real request without the owner's go-ahead for
+  that specific run.
+- **Every model request is reserved in the spend ledger before it is sent**
+  and settled after. Failed requests are charged in full.
+- **`candidate_verified` is not `resolved`.** Only hidden-test grading
+  decides `resolved`; never report one as the other.
+- **Raw traces stay local.** Share `report.md`, never `trace.jsonl`.
 - **No installs or new dependencies without asking.** When one is added,
   update `docs/third-party-licenses.md`.
 - **The host never executes repository code under analysis.** It runs only

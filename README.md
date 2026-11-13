@@ -10,9 +10,9 @@ report for a human to accept or reject.
 
 ## Status
 
-Early development. The foundation, the restricted test sandbox, the
-evaluation task format, and read-only issue intake with repository tools are
-in place. No agent functionality exists yet: nothing calls a model.
+Early development. The sandbox, the evaluation tasks, read-only issue intake
+and a single-attempt baseline agent are in place. The agent has only been run
+with a scripted model: no live model call has been made yet.
 
 | Milestone | State |
 |---|---|
@@ -20,7 +20,7 @@ in place. No agent functionality exists yet: nothing calls a model.
 | 2. Foundation | Built; CI gate not passed ([details](docs/ci-status.md)) |
 | 3. Sandbox and task format | Built and verified locally; not yet run on Linux CI |
 | 4. Intake and repository tools | Built and verified locally; not yet run on Linux CI |
-| 5. Baseline end to end, plus evaluator | Not started |
+| 5. Baseline end to end, plus evaluator | Built and verified locally with a scripted model; live pilot not run |
 | 6. Stateful repair loop | Not started |
 | 7. Report and approval-gated draft PR | Not started |
 | 8. Evaluation and release | Not started |
@@ -32,6 +32,7 @@ in place. No agent functionality exists yet: nothing calls a model.
 - [Technology decisions](docs/decisions.md)
 - [Sandbox](docs/sandbox.md)
 - [Issue intake and repository tools](docs/intake.md)
+- [Baseline coding agent](docs/baseline.md)
 - [Evaluation tasks](docs/evaluation-tasks.md)
 - [Grading integrity](docs/grading-integrity.md)
 - [Third-party licenses](docs/third-party-licenses.md)

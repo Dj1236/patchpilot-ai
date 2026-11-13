@@ -23,6 +23,13 @@ this list whenever a dependency is added.
 | httpx, httpcore, idna | BSD-3-Clause |
 | h11, anyio | MIT |
 | certifi | MPL-2.0 |
+| anthropic, opentelemetry-api | Apache-2.0 |
+| httpx2, httpcore2 | BSD-3-Clause |
+| jiter, docstring-parser, truststore | MIT |
+| sniffio | MIT OR Apache-2.0 |
+
+`httpx2-jsfetch` appears in `uv.lock` for other platforms. It is not installed
+here, so its license was not read from metadata.
 
 ## Development-only dependencies
 
