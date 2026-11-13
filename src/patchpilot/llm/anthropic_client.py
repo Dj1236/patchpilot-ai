@@ -88,6 +88,9 @@ class AnthropicModel:
             counted = self._client.messages.count_tokens(**self._arguments(request))
         except anthropic.AnthropicError as error:
             raise self._failure(error) from None
+        except TypeError:
+            # Raised by the SDK, before anything is sent, when no credential is set.
+            raise ModelError("api_error", "no model credential is configured") from None
         return int(counted.input_tokens * _COUNT_MARGIN) + _COUNT_PADDING
 
     def complete(self, request: ModelRequest) -> ModelTurn:
