@@ -48,6 +48,11 @@ class Prices(FrozenModel):
 # the 5-minute rate, 1.25 times the input price.
 PRICES: dict[str, Prices] = {
     "claude-sonnet-5-5": Prices(input=2, output=10, cache_write=2.5, cache_read=0.10),
+    # Used on the free tier, where nothing is charged while the key's project
+    # has no billing account. These are the paid list prices that apply from
+    # 2027-01-01 (1.50 and 7.50 USD), rounded up, so the ledger still bounds
+    # what a run could cost if billing turned out to be enabled.
+    "gemini-3.8-flash": Prices(input=2, output=8, cache_write=2, cache_read=0.15),
 }
 
 

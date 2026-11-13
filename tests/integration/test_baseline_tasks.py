@@ -11,14 +11,15 @@ from typing import Any
 
 import pytest
 
-from patchpilot.agent.baseline import RunStatus
+from patchpilot.agent.baseline import RunLimits, RunStatus
 from patchpilot.agent.report import RECORD_FILE, REPORT_FILE
 from patchpilot.agent.trace import TRACE_FILE, replay_model
-from patchpilot.eval.harness import evaluate, run_task, summary_table
+from patchpilot.eval.harness import EvalSummary, evaluate, run_task, summary_table
 from patchpilot.llm.budget import SpendLedger
 from patchpilot.llm.fake import ScriptedModel, final_turn, tool_turn
 from patchpilot.sandbox import DockerSandbox
 from patchpilot.tasks import LoadedTask, load_task
+from tests.gemini_wire import Wire, answer, call, interaction, thought
 
 pytestmark = pytest.mark.sandbox
 
@@ -310,3 +311,53 @@ def test_the_run_command_replays_a_trace_end_to_end(
     assert "status: candidate_verified" in result.output
     assert "hidden tests: resolved" in result.output
     assert "cost: $0." in result.output
+
+
+def test_the_gemini_adapter_reaches_a_resolved_patch_and_its_trace_replays(
+    sandbox: DockerSandbox,
+    cachekit: LoadedTask,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real SDK, answered locally, through the real sandbox and hidden tests."""
+    monkeypatch.setenv("GEMINI_API_KEY", "patchpilot-test-canary-not-a-real-key")
+    wire = Wire(
+        [
+            interaction(thought(), call("call-a", "list_files", {})),
+            interaction(
+                thought("c2lnbmF0dXJlLXR3bw=="),
+                call("call-b", "read_file", {"path": "src/cachekit/lru.py"}),
+                call("call-c", "search_code", {"query": "put("}),
+            ),
+            interaction(answer(cache_proposal())),
+        ]
+    )
+    limits = RunLimits.for_provider("gemini")
+    ledger = SpendLedger(tmp_path / "ledger.jsonl", cap_usd=5.0)
+
+    def run(model: Any, name: str) -> Any:
+        return run_task(
+            cachekit,
+            1,
+            model=model,
+            sandbox=sandbox,
+            ledger=ledger,
+            run_cap_usd=0.75,
+            output_dir=tmp_path / name,
+            limits=limits,
+        )
+
+    live = run(wire.model(), "live")
+    replayed = run(replay_model(tmp_path / "live" / "inj-001-cachekit-1" / TRACE_FILE), "replay")
+
+    assert live.record.status is RunStatus.CANDIDATE_VERIFIED
+    assert live.graded and live.resolved and live.grade_trustworthy
+    assert live.record.manifest.provider == "gemini"
+    assert live.record.manifest.models_reported == ("gemini-3.8-flash",)
+    assert (replayed.record.status, replayed.record.diff, replayed.resolved) == (
+        live.record.status,
+        live.record.diff,
+        live.resolved,
+    )
+    table = summary_table(EvalSummary(mode="baseline", runs=(live,)))
+    assert "gemini/gemini-3.8-flash" in table and "must not be pooled" in table
