@@ -10,9 +10,11 @@ of their place in the document.
 import html
 import json
 import os
+from collections.abc import Iterable
 from pathlib import Path
 
 from patchpilot.agent.baseline import RunRecord, RunStatus
+from patchpilot.agent.trace import redact
 from patchpilot.intake.text import clean_for_presentation
 from patchpilot.llm.budget import usd
 
@@ -136,8 +138,17 @@ def public_report(record: RunRecord, resolved: bool | None = None) -> str:
     return "\n".join(lines)
 
 
-def write_run(record: RunRecord, directory: Path, resolved: bool | None = None) -> None:
-    """Write ``record.json`` and ``report.md`` next to the run's trace."""
+def write_run(
+    record: RunRecord,
+    directory: Path,
+    resolved: bool | None = None,
+    secrets: Iterable[str] = (),
+) -> None:
+    """Write ``record.json`` and ``report.md`` next to the run's trace.
+
+    Known secret values are removed from both, as they are from the trace.
+    """
+    known = tuple(secrets)
     directory.mkdir(parents=True, exist_ok=True)
     payload = {"record": record.model_dump(mode="json"), "resolved": resolved}
     for name, text in (
@@ -146,4 +157,4 @@ def write_run(record: RunRecord, directory: Path, resolved: bool | None = None) 
     ):
         descriptor = os.open(directory / name, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
         with os.fdopen(descriptor, "w") as handle:
-            handle.write(text)
+            handle.write(redact(text, known))

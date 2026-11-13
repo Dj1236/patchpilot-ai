@@ -72,6 +72,7 @@ def run_task(
     files = loaded.agent_files()
     run_id = f"{view.task_id}-{run_index}"
     directory = output_dir / run_id
+    secrets = secrets_from_environment()
     record, patched = run_baseline(
         task_id=view.task_id,
         bug=BugDescription.from_issue(view.issue),
@@ -82,7 +83,7 @@ def run_task(
         model=model,
         sandbox=sandbox,
         budget=RunBudget(ledger, run_id, run_cap_usd),
-        trace=TraceWriter(directory, secrets_from_environment()),
+        trace=TraceWriter(directory, secrets),
         limits=limits,
         run_cap_usd=run_cap_usd,
         run_id=run_id,
@@ -101,7 +102,7 @@ def run_task(
             if files.get(path) != content
         }
         localization = bool(fixed & set(record.changed_files))
-    write_run(record, directory, resolved if patched is not None else None)
+    write_run(record, directory, resolved if patched is not None else None, secrets)
     return TaskRun(
         task_id=view.task_id,
         run_index=run_index,
