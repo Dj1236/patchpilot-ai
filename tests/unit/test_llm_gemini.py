@@ -182,13 +182,31 @@ def test_the_pinned_model_is_accepted_under_its_usual_spellings(reported: str) -
     assert turn.model.startswith(MODEL)
 
 
-def test_an_answer_from_a_different_model_is_an_error_not_a_fallback() -> None:
-    wire = Wire([interaction(answer("{}"), model="gemini-3.5-flash-lite")])
+@pytest.mark.parametrize(
+    "reported",
+    ["gemini-3.5-flash-lite", f"{MODEL}-lite", f"{MODEL}-preview", "gemini-4-carbon", ""],
+)
+def test_an_answer_from_a_different_or_unnamed_model_is_an_error_not_a_fallback(
+    reported: str,
+) -> None:
+    wire = Wire([interaction(answer("{}"), model=reported)])
 
     with pytest.raises(ModelError, match="different model") as caught:
         wire.model().complete(request())
 
     assert caught.value.kind == "api_error"
+
+
+def test_a_cut_off_answer_is_not_continued_with_a_hidden_request() -> None:
+    cut_off = interaction(
+        answer("{"), status="requires_continuation", continuation_token="resume-here"
+    )
+    wire = Wire([cut_off, interaction(answer("}"))])
+
+    turn = wire.model().complete(request())
+
+    assert turn.stop_reason == "max_tokens"
+    assert len(wire.sent) == 1, "a continuation hop would be an uncounted request"
 
 
 # -- failures ---------------------------------------------------------------------------

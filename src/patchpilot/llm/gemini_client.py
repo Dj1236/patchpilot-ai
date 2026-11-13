@@ -267,7 +267,9 @@ class GeminiModel:
             # Anything that goes wrong here happened after the reservation,
             # so it must surface as a failed, charged request.
             raise failure(error) from None
-        if reported and not reported.startswith(request.model):
+        # Exact, or with a numeric version suffix. A prefix match would accept
+        # a sibling such as the "-lite" model. No reported model is no proof.
+        if not re.fullmatch(re.escape(request.model) + r"(-\d+)*", reported):
             raise ModelError("api_error", "the provider answered with a different model")
 
         def count(name: str) -> int:
