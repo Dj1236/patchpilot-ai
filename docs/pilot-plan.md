@@ -24,16 +24,19 @@ All requests used free-tier `gemini-3.8-flash` through `/v1/interactions`.
 - Ledger: 0.5301 USD committed of the 5.00 USD cap, all of it reservations
   charged for failed requests. This is internal accounting, not a bill.
 
-What this shows: the 503 is not caused by PatchPilot's request shape. The
-probe sent the simplest request the API accepts and failed the same way.
-The agent runs sent one identical request, whose fields all match the
-provider's documentation.
+Confirmed: all five generation requests were answered with HTTP 503
+`service_unavailable`. The 503 does not need PatchPilot's request shape to
+occur: the probe sent the simplest request the API accepts and failed the
+same way. The agent runs sent one identical request, and a comparison with
+the provider's documentation found no unsupported field in it.
 
-What it does not show: why the provider answered 503. Its documentation
-calls this code overload or outage, and other free-tier users report the
-same on this model, but five failures within four hours on one project do
-not prove a cause. It is also unknown whether the agent's request would be
-accepted, since no request has succeeded.
+Not confirmed: why the provider answered 503. Provider overload is a
+hypothesis. It fits the provider's documentation, which describes this code
+as overload or outage, and reports from other free-tier users of this model,
+but five failures within four hours on one project do not prove it. It is
+also unknown whether the agent's request would be accepted, since no request
+has succeeded, and whether another model or another time of day would
+behave differently.
 
 The safeguards worked as designed: one bounded retry per request, a 30 s
 wait after a 503 in run 2, no other model tried, every request reserved
