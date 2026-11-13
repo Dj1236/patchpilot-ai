@@ -50,7 +50,7 @@ from patchpilot.repo.tools import RepositoryTools, ToolBudget
 from patchpilot.sandbox.models import FrozenModel, PytestCommand, SandboxLimits, SandboxRunner
 from patchpilot.sandbox.tree import tree_digest
 
-_RETRYABLE = ("timeout", "rate_limited", "connection")
+_RETRYABLE = ("timeout", "rate_limited", "unavailable", "connection")
 _MAX_RETRY_WAIT_SECONDS = 60.0
 
 
@@ -121,6 +121,12 @@ class RunRecord(FrozenModel):
     started_at: datetime
     duration_seconds: float
     model_turns: int
+    # Requests sent to the generation endpoint, whether or not they succeeded.
+    # A turn is an attempt that returned an answer; a retry is a repeat of a
+    # request that failed. Token counting is a separate, free endpoint.
+    generation_attempts: int = 0
+    retries: int = 0
+    token_count_requests: int = 0
     tool_calls: int
     usage: Usage
     cost_micro_usd: int
@@ -146,6 +152,7 @@ def _send(
     trace: TraceWriter,
     index: int,
     attempts: int,
+    totals: dict[str, Any],
 ) -> ModelTurn:
     """Reserve, send and settle one request, with a bounded number of attempts.
 
@@ -156,17 +163,23 @@ def _send(
     last: ModelError | None = None
     for attempt in range(attempts):
         try:
-            reservation = budget.reserve(
-                request.model, model.count_input_tokens(request), request.max_tokens
-            )
+            tokens = model.count_input_tokens(request)
+        except ModelError as error:
+            # A refusal to go on is not a request; any other failure was one.
+            totals["token_counts"] += error.kind != "attempt_limit"
+            raise _Stop(
+                RunStatus.FAILED_INFRASTRUCTURE,
+                f"could not size the request ({error.kind}): {error}",
+            ) from None
+        totals["token_counts"] += 1
+        try:
+            reservation = budget.reserve(request.model, tokens, request.max_tokens)
         except BudgetExceededError as error:
             raise _Stop(RunStatus.BUDGET_EXCEEDED, str(error)) from None
         except UnknownModelPriceError as error:
             raise _Stop(RunStatus.FAILED_INFRASTRUCTURE, str(error)) from None
-        except ModelError as error:
-            raise _Stop(
-                RunStatus.FAILED_INFRASTRUCTURE, f"could not size the request: {error.kind}"
-            ) from None
+        totals["attempts"] += 1
+        totals["retries"] += attempt > 0
         try:
             turn = model.complete(request)
         except ModelError as error:
@@ -182,8 +195,10 @@ def _send(
         budget.settle(reservation, request.model, turn.usage)
         trace.response(index, turn)
         return turn
+    # The message is built by the adapter from the status and the provider's
+    # short error code only, so it is safe to show.
     kind = last.kind if last else "unknown"
-    raise _Stop(RunStatus.FAILED_INFRASTRUCTURE, f"the model request failed ({kind})")
+    raise _Stop(RunStatus.FAILED_INFRASTRUCTURE, f"the model request failed ({kind}): {last}")
 
 
 def _explore_and_propose(
@@ -206,7 +221,7 @@ def _explore_and_propose(
             max_tokens=limits.max_output_tokens,
             effort=limits.effort,
         )
-        turn = _send(model, request, budget, trace, index, limits.max_request_attempts)
+        turn = _send(model, request, budget, trace, index, limits.max_request_attempts, totals)
         totals["turns"] += 1
         totals["usage"] = totals["usage"].plus(turn.usage)
         if turn.model:
@@ -280,7 +295,14 @@ def run_baseline(
         max_call_output_bytes=limits.max_tool_call_output_bytes,
     )
     tools = RepositoryTools(files, tool_budget)
-    totals: dict[str, Any] = {"turns": 0, "usage": Usage(), "models": set()}
+    totals: dict[str, Any] = {
+        "turns": 0,
+        "attempts": 0,
+        "retries": 0,
+        "token_counts": 0,
+        "usage": Usage(),
+        "models": set(),
+    }
     tree_sha = tree_digest(files)
     trace.start(
         {
@@ -344,6 +366,9 @@ def run_baseline(
         started_at=started_at,
         duration_seconds=time.monotonic() - started,
         model_turns=totals["turns"],
+        generation_attempts=totals["attempts"],
+        retries=totals["retries"],
+        token_count_requests=totals["token_counts"],
         tool_calls=tool_budget.calls,
         usage=totals["usage"],
         cost_micro_usd=budget.spent,

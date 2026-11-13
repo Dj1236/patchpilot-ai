@@ -20,6 +20,7 @@ ErrorKind = Literal[
     "quota_exhausted",
     "attempt_limit",
     "not_configured",
+    "unavailable",
     "connection",
     "api_error",
 ]

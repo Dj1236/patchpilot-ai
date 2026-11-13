@@ -37,6 +37,8 @@ from patchpilot.llm.base import ModelError, ModelRequest, ModelTurn, StopReason,
 _COUNT_MARGIN = 1.10
 _COUNT_PADDING = 256
 _RATE_LIMIT_WAIT_SECONDS = 60.0
+# No jitter: one process makes one retry, so there is no herd to spread out.
+_UNAVAILABLE_WAIT_SECONDS = 30.0
 # Effort levels this model accepts. Others are refused, not rounded.
 _THINKING_LEVELS = ("low", "medium", "high")
 _PAID_MODES = ("GOOGLE_GENAI_USE_VERTEXAI", "GOOGLE_GENAI_USE_ENTERPRISE")
@@ -134,8 +136,11 @@ def failure(error: Exception) -> ModelError:
             return ModelError("connection", "the model API could not be reached")
         return ModelError("api_error", f"unexpected model client error: {name}")
     detail = f"the model API returned HTTP {status}" + (f" ({code})" if code else "")
-    # Server-side failures are worth one more attempt; client errors are not.
-    return ModelError("connection" if status >= 500 else "api_error", detail)
+    if status >= 500:
+        # The provider answered, but is overloaded or failing. One more
+        # attempt is worth making, after a pause; an immediate retry is not.
+        return ModelError("unavailable", detail, retry_after_seconds=_UNAVAILABLE_WAIT_SECONDS)
+    return ModelError("api_error", detail)
 
 
 def _steps(messages: tuple[dict[str, Any], ...]) -> list[dict[str, Any]]:

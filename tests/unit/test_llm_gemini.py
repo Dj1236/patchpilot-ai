@@ -238,8 +238,8 @@ DAILY = {
         (api_error(429, "too_many_requests"), "rate_limited", 60.0),
         (api_error(429, "quota_exceeded"), "quota_exhausted", 0.0),
         ((429, DAILY), "quota_exhausted", 0.0),
-        (api_error(503, "service_unavailable"), "connection", 0.0),
-        (api_error(500, "api_error"), "connection", 0.0),
+        (api_error(503, "service_unavailable"), "unavailable", 30.0),
+        (api_error(500, "api_error"), "unavailable", 30.0),
         (api_error(401, "authentication"), "api_error", 0.0),
         (api_error(402, "payment_required"), "api_error", 0.0),
         (api_error(404, "model_not_found"), "api_error", 0.0),
@@ -526,3 +526,89 @@ def test_the_live_client_is_built_with_the_pilot_limits() -> None:
     limiter = GenerationLimiter()
 
     assert (limiter._per_window, limiter._window, limiter._max_attempts) == (4, 60.0, 8)
+
+
+# -- provider unavailability ------------------------------------------------------------------
+
+UNAVAILABLE = api_error(503, "service_unavailable")
+
+
+def _waits(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    waits: list[float] = []
+    monkeypatch.setattr("patchpilot.agent.baseline.time.sleep", waits.append)
+    return waits
+
+
+def test_two_503_answers_wait_once_then_stop_and_the_report_says_why(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    waits, clock = _waits(monkeypatch), FakeClock()
+    wire = Wire([UNAVAILABLE, UNAVAILABLE, interaction(answer(proposal()))])
+    model = wire.model(clock.limiter())
+    ledger = SpendLedger(tmp_path / "ledger.jsonl", 5.0)
+
+    record = _run(model, tmp_path / "run", ledger, "run")
+
+    assert record.status is RunStatus.FAILED_INFRASTRUCTURE
+    assert record.detail == (
+        "the model request failed (unavailable): "
+        "the model API returned HTTP 503 (service_unavailable)"
+    )
+    assert waits == [30.0], "one pause before the one retry, none after it"
+    assert (record.model_turns, record.generation_attempts, record.retries) == (0, 2, 1)
+    assert record.token_count_requests == 2
+    assert len(wire.sent) == 2 and model.limiter.attempts == 2, "the retry allowance is unchanged"
+    assert record.manifest.models_reported == (), "no other model was tried"
+    # Each failure is charged its full reservation, and stays under the run cap.
+    assert ledger.committed() == record.cost_micro_usd
+    assert 0 < record.cost_micro_usd < 750_000
+    report = public_report(record)
+    assert "HTTP 503 (service_unavailable)" in report
+    assert "**Generation attempts:** 2, of which 1 were retries" in report
+    assert "**token-count requests:** 2" in report and "**Model turns:** 0" in report
+    assert "not a bill" in report and "provider detail" not in report and SECRET not in report
+
+
+def test_an_answer_after_one_503_completes_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    waits, clock = _waits(monkeypatch), FakeClock()
+    wire = Wire([UNAVAILABLE, interaction(answer(proposal()))])
+    model = wire.model(clock.limiter())
+
+    record = _run(model, tmp_path / "run", SpendLedger(tmp_path / "ledger.jsonl", 5.0), "run")
+
+    assert record.status is RunStatus.CANDIDATE_VERIFIED and waits == [30.0]
+    assert (record.model_turns, record.generation_attempts, record.retries) == (1, 2, 1)
+    assert record.token_count_requests == 2 and len(wire.sent) == 2
+    assert clock.sleeps == [], "two requests are well inside the pacing window"
+
+
+def test_a_connection_failure_is_not_reported_as_the_provider_being_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    waits, clock = _waits(monkeypatch), FakeClock()
+    wire = Wire([httpx.ConnectError("refused"), httpx.ConnectError("refused")])
+
+    record = _run(
+        wire.model(clock.limiter()), tmp_path / "run", SpendLedger(tmp_path / "l.jsonl", 5.0), "run"
+    )
+
+    assert record.detail == (
+        "the model request failed (connection): the model API could not be reached"
+    )
+    assert waits == [] and record.generation_attempts == 2
+
+
+def test_a_clean_run_reports_its_attempts_without_retries(tmp_path: Path) -> None:
+    clock = FakeClock()
+    wire = Wire(
+        [interaction(thought(), call("call-a", "list_files", {})), interaction(answer(proposal()))]
+    )
+
+    record = _run(
+        wire.model(clock.limiter()), tmp_path / "run", SpendLedger(tmp_path / "l.jsonl", 5.0), "run"
+    )
+
+    assert (record.model_turns, record.generation_attempts, record.retries) == (2, 2, 0)
+    assert record.token_count_requests == 2

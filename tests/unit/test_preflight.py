@@ -354,7 +354,7 @@ def test_the_gemini_preflight_uses_only_the_free_endpoints_and_labels_its_estima
         ),
         (Wire(count=api_error(429, "quota_exceeded")), "quota_exhausted"),
         (Wire(count=api_error(429, "rate_limit_exceeded")), "rate_limited"),
-        (Wire(count=api_error(503, "service_unavailable")), "connection"),
+        (Wire(count=api_error(503, "service_unavailable")), "unavailable"),
     ],
 )
 def test_gemini_preflight_failures_have_a_clear_kind(
