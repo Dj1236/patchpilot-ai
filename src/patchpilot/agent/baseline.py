@@ -303,7 +303,7 @@ def run_baseline(
     except _Stop as stop:
         status, detail = stop.status, stop.detail
 
-    trace.finish(status.value, detail)
+    trace.finish(status.value, detail, diff)
     changed = (
         tuple(sorted(path for path in patched if patched[path] != files.get(path)))
         if patched is not None

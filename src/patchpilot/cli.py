@@ -8,7 +8,7 @@ from typing import Annotated
 import typer
 
 from patchpilot import __version__
-from patchpilot.agent.trace import TraceError, replay_model
+from patchpilot.agent.trace import TraceError, recorded_outcome, replay_model, text_digest
 from patchpilot.config import Settings
 from patchpilot.eval.harness import evaluate, run_task, summary_table
 from patchpilot.intake.allowlist import AllowlistError, RepositoryNotApprovedError, load_allowlist
@@ -154,6 +154,11 @@ def run(
         typer.echo(f"failed: {error}", err=True)
         raise typer.Exit(code=1) from None
     record = result.record
+    if replay is not None:
+        expected = recorded_outcome(replay)
+        if expected is not None and expected != (record.status.value, text_digest(record.diff)):
+            typer.echo("failed: the replay does not match the outcome the trace recorded", err=True)
+            raise typer.Exit(code=1)
     graded = ("resolved" if result.resolved else "not resolved") if result.graded else "not graded"
     typer.echo(f"status: {record.status.value}")
     typer.echo(f"detail: {record.detail}")
