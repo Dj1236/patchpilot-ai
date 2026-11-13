@@ -92,9 +92,10 @@ succeeds.**
 
 Failures are reported by kind (`no_credentials`, `authentication`,
 `permission`, `model_unavailable`, `malformed_request`, `rate_limited`,
-`connection`, `provider_error`). The provider's own explanation of a
-rejected request is shown, bounded and with known secrets removed. Prompt
-contents are never printed.
+`connection`, `provider_error`). A spend ledger that cannot be read is
+reported as `ledger_unreadable`, before anything is sent. The provider's own
+explanation of a rejected request is shown, bounded and with known secrets
+removed. Prompt contents are never printed.
 
 **Credentials.** Use a dedicated key for PatchPilot. Preferred: export
 `ANTHROPIC_API_KEY` in the shell that starts PatchPilot, from a secret store

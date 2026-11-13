@@ -18,7 +18,7 @@ from patchpilot.intake.github import GitHubClient, GitHubError
 from patchpilot.intake.pipeline import run_intake
 from patchpilot.intake.urls import IssueUrlError
 from patchpilot.llm.base import ModelClient
-from patchpilot.llm.budget import SpendLedger, usd
+from patchpilot.llm.budget import BudgetExceededError, SpendLedger, usd
 from patchpilot.llm.preflight import PreflightError, connect, first_request, run_preflight
 from patchpilot.repo.fetch import FetchError
 from patchpilot.sandbox.docker import DockerSandbox
@@ -234,6 +234,10 @@ def preflight(
         )
     except PreflightError as error:
         typer.echo(f"preflight failed ({error.kind}): {error}", err=True)
+        raise typer.Exit(code=1) from None
+    except BudgetExceededError as error:
+        # Raised while reading the ledger, before any request is sent.
+        typer.echo(f"preflight failed (ledger_unreadable): {error}", err=True)
         raise typer.Exit(code=1) from None
     typer.echo(f"task: {report.task_id}")
     typer.echo(f"model: {report.model} ({report.model_display_name or 'no display name'})")
