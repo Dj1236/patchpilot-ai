@@ -180,6 +180,33 @@ Compatibility limits, all unverified until a live run:
 - Effort `xhigh` and `max` are not offered by this model and are refused.
 - To replay a Gemini trace, set `PATCHPILOT_PROVIDER=gemini`.
 
+## Diagnostic probe
+
+`patchpilot probe` sends one minimal generation request to the pinned Gemini
+model: the fixed text "Reply with exactly OK.", an output limit of 64
+tokens, `store` off, and nothing else. No tools, no answer schema, no
+thinking setting, no history. It exists to tell "the model is unavailable to
+this key" apart from "the agent's request is the problem".
+
+- It is a real generation request. It needs the owner's go-ahead and the
+  free-tier confirmation flag, and uses one of the day's requests.
+- It is sent once: no SDK retry, no automatic continuation, no retry by
+  PatchPilot, no other model.
+- It is reserved in the spend ledger before it is sent, under a `probe-`
+  run id, and a failure is charged its full reservation (about 0.001 USD).
+  The reservation uses the prompt's length as its token bound, so the probe
+  makes no token-count request.
+- Its result is written to `runs/probes/<timestamp>/probe.json`, apart from
+  agent runs.
+- It reports the HTTP status, a provider error code from a fixed list,
+  whether an answer came, the duration, token counts and the ledger
+  amounts. The provider's message text, the response body and the model's
+  answer are never shown or stored. A code outside the list is shown as
+  `unrecognized`.
+
+One probe is weak evidence: overload comes and goes. It is meant to be read
+together with an agent run made right after it.
+
 ## Reading the numbers in a report
 
 - **Model turns** are generation requests that returned an answer.

@@ -17,8 +17,16 @@ from patchpilot.intake.allowlist import AllowlistError, RepositoryNotApprovedErr
 from patchpilot.intake.github import GitHubClient, GitHubError
 from patchpilot.intake.pipeline import run_intake
 from patchpilot.intake.urls import IssueUrlError
-from patchpilot.llm.base import ModelClient, ModelError
-from patchpilot.llm.budget import BudgetExceededError, SpendLedger, usd
+from patchpilot.llm import gemini_probe
+from patchpilot.llm.base import PINNED_MODELS, ModelClient, ModelError
+from patchpilot.llm.budget import (
+    BudgetExceededError,
+    RunBudget,
+    SpendLedger,
+    prices_for,
+    usd,
+    worst_case_cost,
+)
 from patchpilot.llm.gemini_client import connect as gemini_connect
 from patchpilot.llm.preflight import (
     PreflightError,
@@ -115,16 +123,20 @@ def _refuse(message: str) -> typer.Exit:
     return typer.Exit(code=2)
 
 
+def _require_free_tier(settings: Settings) -> None:
+    if not settings.gemini_free_tier_confirmed:
+        # Whether a key is billed is a property of its project that code cannot see.
+        raise _refuse(
+            "a live Gemini run needs the owner's confirmation that the key's project "
+            "has no billing account: check it, then set "
+            "PATCHPILOT_GEMINI_FREE_TIER_CONFIRMED=1"
+        )
+
+
 def _live_model(settings: Settings) -> ModelClient:
     """Build the client of the configured provider. There is no fallback to another one."""
     if settings.provider == "gemini":
-        if not settings.gemini_free_tier_confirmed:
-            # Whether a key is billed is a property of its project that code cannot see.
-            raise _refuse(
-                "a live Gemini run needs the owner's confirmation that the key's project "
-                "has no billing account: check it, then set "
-                "PATCHPILOT_GEMINI_FREE_TIER_CONFIRMED=1"
-            )
+        _require_free_tier(settings)
         from patchpilot.llm.gemini_client import GeminiModel
 
         try:
@@ -308,4 +320,83 @@ def preflight(
         typer.echo(f"free tier confirmed by the owner: {confirmed}")
     typer.echo("no generation request was made; this does not guarantee a paid request succeeds")
     if not (report.fits_run_cap and report.fits_total_cap):
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def probe() -> None:
+    """Send one minimal Gemini request, to see whether generation is available at all.
+
+    A real generation request: it needs the owner's authorization, uses one
+    of the day's requests and is entered in the spend ledger. It is sent
+    once, with no retry, no tools and no answer schema.
+    """
+    settings = Settings()
+    if settings.provider != "gemini":
+        raise _refuse("the probe is for Gemini only: set PATCHPILOT_PROVIDER=gemini")
+    _require_free_tier(settings)
+    model = PINNED_MODELS["gemini"]
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    run_id = f"probe-{stamp}"
+    reserved = worst_case_cost(
+        gemini_probe.INPUT_TOKENS_RESERVED, gemini_probe.MAX_OUTPUT_TOKENS, prices_for(model)
+    )
+    try:
+        client = gemini_connect(gemini_probe.TIMEOUT_SECONDS)
+        ledger = SpendLedger(settings.runs_dir / "ledger.jsonl", settings.max_cost_usd)
+        budget = RunBudget(ledger, run_id, settings.run_cap_usd)
+        # Reserved before anything is sent, like every other model request.
+        reservation = budget.reserve(
+            model, gemini_probe.INPUT_TOKENS_RESERVED, gemini_probe.MAX_OUTPUT_TOKENS
+        )
+    except (ModelError, BudgetExceededError) as error:
+        typer.echo(f"probe not sent: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    result = gemini_probe.run_probe(client, model)
+    if result.response_received:
+        committed = budget.settle(reservation, model, result.usage)
+    else:
+        # A failed request is charged in full: it may have been billed.
+        committed = budget.settle_failed(reservation, result.provider_code or "no answer")
+
+    directory = settings.runs_dir / "probes" / stamp
+    directory.mkdir(parents=True)
+    record = directory / "probe.json"
+    record.write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "provider": "gemini",
+                "result": result.model_dump(mode="json"),
+                "ledger": {"reserved_micro_usd": reserved, "committed_micro_usd": committed},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    record.chmod(0o600)
+
+    typer.echo(f"model requested: {result.model}")
+    typer.echo(f"response received: {'yes' if result.response_received else 'no'}")
+    typer.echo(f"http status: {result.http_status if result.http_status else 'none'}")
+    if result.response_received:
+        typer.echo(f"interaction status: {result.interaction_status}")
+        typer.echo(f"model reported: {result.model_reported or 'none'}")
+        typer.echo(f"answer was exactly OK: {'yes' if result.answer_is_ok else 'no'}")
+        typer.echo(
+            f"tokens reported by the provider: {result.usage.input_tokens} input, "
+            f"{result.usage.output_tokens} output"
+        )
+    else:
+        typer.echo(f"provider code: {result.provider_code or 'none'}")
+        typer.echo(f"reason: {result.reason}")
+    typer.echo(f"duration: {result.duration_seconds:.1f} s")
+    typer.echo(
+        f"ledger: reserved ${usd(reserved):.4f}, committed ${usd(committed):.4f} "
+        "(internal accounting, not a bill)"
+    )
+    typer.echo(f"record: {record}")
+    typer.echo("one generation request was sent; nothing was retried")
+    if not result.response_received:
         raise typer.Exit(code=1)
