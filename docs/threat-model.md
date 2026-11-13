@@ -65,3 +65,10 @@ where changing a wrong test is sometimes the right fix.
 - Docker on macOS runs inside a virtual machine. Linux CI is the reference
   environment for sandbox safety tests.
 - Source code from approved repositories is sent to the model provider.
+- On the Gemini free tier the provider may use prompts and responses to
+  improve its products, and people may review them. Only synthetic fixtures
+  or approved public repositories may be sent there. Hidden tests and
+  reference fixes are never sent to any provider.
+- Whether a Gemini key is billed depends on its Google project, which code
+  cannot see. The owner confirms the project has no billing account; the
+  spend ledger bounds the exposure if that is wrong.

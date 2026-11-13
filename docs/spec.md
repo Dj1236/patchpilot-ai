@@ -32,7 +32,8 @@ returns a tested patch with evidence, for a human to accept or reject.
 - Draft pull requests beyond the approval-gated Milestone 7 extension.
 - Stronger isolation (microVM or gVisor) before accepting untrusted public
   repositories.
-- A second model provider.
+- More model providers. A second one, Gemini, was added in Milestone 5 by
+  the owner's decision; see [decisions.md](decisions.md), record 14.
 - Semantic code search.
 - SWE-bench Lite evaluation.
 - A web UI.
@@ -57,7 +58,7 @@ returns a tested patch with evidence, for a human to accept or reject.
 | Intake | Fetch and normalize the issue | Allowlist is checked in code before any clone. |
 | Workspace | Clone at a pinned SHA, apply edits, produce the diff | Hooks, submodules and LFS are disabled. |
 | Repo tools | List, read, search | Paths are resolved and confined in code, including symlinks. Python files are parsed, never imported. |
-| Model client | One thin interface; Claude Sonnet 5.5 (`claude-sonnet-5-5`) and a scripted fake | A hard spend cap is enforced in code. |
+| Model client | One thin interface; Claude Sonnet 5.5 (`claude-sonnet-5-5`), free-tier Gemini 3.8 Flash (`gemini-3.8-flash`) and a scripted fake | One pinned model per provider, chosen by configuration and never by fallback. A hard spend cap is enforced in code. |
 | Patch policy | Enforce edit rules | Runs outside the model, before anything is written. |
 | Sandbox | Run allowlisted test commands | Commands come from the environment manifest, never from the model. |
 | Store and trace | Run state, manifest, per-step trace | Secrets are redacted before writing. |
@@ -204,7 +205,7 @@ See [threat-model.md](threat-model.md).
 | 2 | Foundation: repository, `CLAUDE.md`, tooling, CI | CI green on an empty package | Starting implementation |
 | 3 | Sandbox and task format; first two or three fixtures | Safety tests pass on Linux CI | Installing a Docker runtime |
 | 4 | Intake and repository tools | Allowlist and path-confinement tests pass | n/a |
-| 5 | Baseline end to end, plus evaluator | One fixture graded `resolved` by hidden tests; pilot cost measured | First paid calls, within 10 USD |
+| 5 | Baseline end to end, plus evaluator | One fixture graded `resolved` by hidden tests; pilot cost measured | First live calls. The pilot uses free-tier Gemini; any paid call stays within 10 USD |
 | 6 | Stateful repair loop on LangGraph | Resume works; loop compared with baseline on the fixtures | n/a |
 | 7 | Final report; approval-gated draft PR as an extension | Fake-API write test passes | Creating a write token |
 | 8 | Full task set, results, documentation, release | Criteria 1-12 | Benchmark budget, estimated from the pilot |
@@ -226,4 +227,8 @@ See [decisions.md](decisions.md).
 - The full benchmark is about 78 live runs and may exceed the provisional
   ceiling; the Milestone 5 pilot will measure it.
 - Source code from approved repositories is sent to the model provider,
-  which is acceptable for public fixtures only.
+  which is acceptable for public fixtures only. On the Gemini free tier the
+  provider may also use it to improve its products.
+- A free-tier pilot with a small, fast model measures the pipeline, not the
+  best achievable quality. Results name their provider and model and are
+  not comparable across models.

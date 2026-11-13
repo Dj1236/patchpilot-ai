@@ -12,7 +12,9 @@ report for a human to accept or reject.
 
 Early development. The sandbox, the evaluation tasks, read-only issue intake
 and a single-attempt baseline agent are in place. The agent has only been run
-with a scripted model: no live model call has been made yet.
+with a scripted model: no live model call has been made yet. Two providers
+are supported, Claude and free-tier Gemini; the Gemini adapter is tested
+offline only.
 
 | Milestone | State |
 |---|---|
