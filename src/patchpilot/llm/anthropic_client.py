@@ -32,8 +32,9 @@ class AnthropicModel:
         if client is None:
             import anthropic
 
-            # Credentials come from the environment or an SDK profile. They
-            # are never read, stored or logged by PatchPilot.
+            # Credentials come from the environment or an SDK profile and are
+            # used by the SDK. They are never stored or logged by PatchPilot,
+            # which reads them only to redact them from traces and reports.
             client = anthropic.Anthropic(max_retries=0, timeout=timeout_seconds)
         self._client = client
 

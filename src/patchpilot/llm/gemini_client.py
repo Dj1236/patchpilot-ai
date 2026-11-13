@@ -251,8 +251,9 @@ class GeminiModel:
         timeout_seconds: float = 300.0,
         limiter: GenerationLimiter | None = None,
     ) -> None:
-        # Credentials come from the environment. They are never read, stored
-        # or logged by PatchPilot.
+        # Credentials come from the environment and are used by the SDK. They
+        # are never stored or logged by PatchPilot, which reads them only to
+        # redact them from traces and reports.
         self._client = connect(timeout_seconds) if client is None else client
         self.limiter = limiter or GenerationLimiter()
         self.count_requests = 0
