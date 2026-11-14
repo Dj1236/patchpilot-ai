@@ -11,6 +11,12 @@ a throwaway branch on 2026-11-12, failed the same way. The workflow file
 itself is registered by GitHub as valid and active. The cause is a
 restriction on the GitHub account, outside this repository.
 
+**Checked again on 2026-11-14, read-only:** the latest runs still end in
+`startup_failure`, while Actions is enabled for the repository with all
+actions allowed. The restriction is at account level (likely billing or a
+spending limit); fixing it needs the owner in GitHub's account settings.
+The same exception now covers Milestones 6 to 8.
+
 ## Exception
 
 The project owner authorized Milestone 3 to proceed while this external

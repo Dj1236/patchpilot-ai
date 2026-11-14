@@ -18,7 +18,11 @@ request needs its own go-ahead. Keep `runs/` and its ledger as they are.
 Milestone 6 is built offline with the owner's authorization: the repair
 loop (`--mode repair`), JSON checkpoints and `patchpilot resume` are
 verified with scripted models only (`docs/repair-loop.md`). LangGraph was
-not adopted (decision 15). The live comparison is still open.
+not adopted (decision 15). Milestone 7 (approval-gated draft PRs,
+`docs/github-submission.md`) and the offline part of Milestone 8 (four tasks,
+`patchpilot benchmark --scripted`, security review, release docs) are done.
+Still open: any live model result, a real GitHub write, hosted CI. See
+`docs/release-checklist.md`.
 PatchPilot does not load `.env`; the key comes from the process environment.
 Milestone 6 is not started and waits for measured live results. GitHub Actions cannot start on this account, so no CI gate
 has passed; see `docs/ci-status.md` and never describe CI as green. Each
