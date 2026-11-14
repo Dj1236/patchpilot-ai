@@ -88,7 +88,7 @@ Token counts and ledger figures in the JSON are the script's placeholders.
 | Patch edits or adds tests to game grading | Patch policy forbids changing existing tests and adding config files; grading takes tests from the pin and drops candidate test files |
 | Overfitting to the agent's own test | Not prevented by the agent; caught by hidden tests (see the exprcalc case) |
 | Test results forged by code under test in the same process | **Not prevented.** Known V1 limitation, kept as an expected failure; see [grading-integrity.md](grading-integrity.md). Mitigation needs a second, separate process to collect results, which is a sandbox redesign |
-| False negatives in grading | Possible if a hidden test is flaky; tasks are checked to be deterministic by repeated fixture runs, not proven |
+| False negatives or positives from flaky tests | Not checked: no task is run repeatedly to prove its tests deterministic. The fixture tests are written without randomness or timing |
 | Replay determinism | Replay matches requests by digest and stops on any difference; object addresses in test output are normalised |
 | Failure classification | Every run ends in one status; infrastructure failures are separate from patch failures |
 

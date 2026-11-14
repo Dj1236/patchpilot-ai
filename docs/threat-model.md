@@ -43,10 +43,14 @@ The sandbox controls in the table above are implemented and verified by
 tests that attack a real container; see [sandbox.md](sandbox.md) for the
 control-by-control evidence and the remaining limitations. Read-only issue
 intake, the allowlist, hardened fetching and the confined repository tools
-are implemented too; see [intake.md](intake.md). No write access to GitHub
-exists anywhere in the code. The patch policy, the
+are implemented too; see [intake.md](intake.md). The patch policy, the
 prompt builder and the spend ledger are implemented as well; see
-[baseline.md](baseline.md). No live model call has been made yet.
+[baseline.md](baseline.md). The only GitHub write path is `patchpilot submit`,
+gated by a person's approval of the exact proposal and tested only against a
+fake API; see [github-submission.md](github-submission.md). Live model requests
+were made in the Gemini pilot; every one was answered with HTTP 503, so no
+model output exists. See [security-review.md](security-review.md) for the
+current control-by-control review.
 
 ## The add-only test rule
 

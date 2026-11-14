@@ -1,6 +1,6 @@
 # Milestone 5, step 12: live model pilot plan
 
-Status: **attempted twice, no model output yet.** Every generation request so
+Status: **three agent runs and two probes attempted, no model output yet.** Every generation request so
 far was answered with HTTP 503 by the provider; see "Outcome so far". Each
 further live request needs the owner's explicit go-ahead.
 
@@ -13,15 +13,20 @@ All requests used free-tier `gemini-3.8-flash` through `/v1/interactions`.
 | 09:13 | Agent run 1 on `inj-001-cachekit` | 2 | HTTP 503 `service_unavailable` twice, after 1.5 s and 1.0 s |
 | 09:42 | Agent run 2 on `inj-001-cachekit` | 2 | HTTP 503 `service_unavailable` twice, after 7.2 s and 47.5 s, with a 30 s wait between |
 | 12:55 | Minimal probe: text only, no tools, no schema | 1 | HTTP 503 `service_unavailable` after 2.9 s |
+| 13:24 | Minimal probe on `gemini-3.6-flash` | 1 | HTTP 503 `service_unavailable` |
+| 13:25 | Agent run 3 on `inj-001-cachekit`, `gemini-3.6-flash` | 2 | HTTP 503 `service_unavailable` twice |
 
 - No model turn, tool call, patch or grading has happened. Nothing about
   quality, tools with a JSON schema, thought signatures or token usage has
   been measured. `resolved` is unset, not false.
 - Token counting and the model-metadata check worked each time.
-- Records: `runs/20261113T091340851217Z/`, `runs/20261113T094252729212Z/`
-  and `runs/probes/20261113T125556644896Z/`. They are kept, with the ledger,
+- Eight generation requests in all, on both approved models; every one got
+  HTTP 503. Run 3 was started although the probe before it had failed.
+- Records: `runs/20261113T091340851217Z/`, `runs/20261113T094252729212Z/`,
+  `runs/20261113T132509600940Z/`, `runs/probes/20261113T125556644896Z/` and
+  `runs/probes/20261113T132453172172Z/`. They are kept, with the ledger,
   as the history of the pilot.
-- Ledger: 0.5301 USD committed of the 5.00 USD cap, all of it reservations
+- Ledger: 0.7957 USD committed of the 5.00 USD cap, all of it reservations
   charged for failed requests. This is internal accounting, not a bill.
 
 Confirmed: all five generation requests were answered with HTTP 503

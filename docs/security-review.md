@@ -24,7 +24,7 @@ manipulated and limits what a manipulated model can do.
 | Writing outside the workspace | Read-only root, tmpfs scratch space, no host mounts | same |
 | Privilege | Non-root `--user`, `--cap-drop ALL`, `no-new-privileges` | same |
 | Resource exhaustion | Memory, CPU, PID and time limits; output capped | `tests/integration/test_sandbox_limits.py` |
-| Leftover processes | `--init`, process group kill, container removal checked | `test_sandbox_controls.py`, `tests/unit/test_sandbox_process.py` |
+| Leftover processes | `--init`, process group kill, container removal checked | `tests/integration/test_sandbox_limits.py`, `tests/unit/test_sandbox_docker.py`, `tests/unit/test_sandbox_process.py` |
 | Commands from the model | Test commands come from the task manifest only | `tests/unit/test_sandbox_models.py` |
 
 Security tests attack a real container, not flags. Linux CI, the reference
@@ -65,7 +65,15 @@ bytes.
 - Tests can forge their own results in the same process (expected failure in
   `test_grading_integrity.py`).
 - Labeling untrusted text helps the model; it is not a control.
-- The approval records the local user name, not a verified identity.
+- The approval is a local JSON file. It records the local user name, not a
+  verified identity, and is not signed: anyone who can write to the run
+  directory can create one. The gate protects against the model and against
+  approving the wrong patch, not against a malicious local user.
+- Code refuses classic tokens but cannot check that a fine-grained token is
+  limited to one repository. Creating it with that scope is the owner's job.
+- If a write was left `uncertain` and the approval then expires, `submit`
+  refuses both the old approval (expired) and a new one (another approval).
+  The run must then be checked on GitHub by hand. This fails closed.
 - No real GitHub write has been made; GitHub's real behavior is assumed from
   its documentation.
 - Free-tier Gemini may use prompts for product improvement; only synthetic

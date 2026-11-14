@@ -119,4 +119,10 @@ A repeated commit is simply unused.
 - After `uncertain`, a read that shows no pull request is trusted. If
   GitHub's list lagged behind a pull request that was created, a second one
   could be opened. This is unverified.
-- The approval binds to the local user name, which is not an identity check.
+- The approval is an unsigned local file bound to the local user name, not
+  an identity check: anyone who can write the run directory can approve.
+- The token's repository scope is not checked by code; only classic tokens
+  are refused.
+- If a write is left `uncertain` and the approval expires before `submit` is
+  run again, it cannot be reconciled by `submit`: a new approval is refused
+  for an already started submission. Check GitHub by hand in that case.
