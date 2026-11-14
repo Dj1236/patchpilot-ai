@@ -187,6 +187,22 @@ def test_proposal_content_holds_no_secret_hidden_result_or_live_markup(tmp_path:
         make(verified(tmp_path / "s", edits=[leaking]), secrets=(SECRET,))
 
 
+def test_a_proposal_is_never_cut_for_review(tmp_path: Path) -> None:
+    from patchpilot.submit import proposal as module
+
+    setup = Setup(tmp_path)
+    review = (setup.directory / "pr-proposal.md").read_text()
+    for change in setup.proposal.changes:
+        assert change.content in review and change.sha256 in review
+
+    record = verified(tmp_path / "big")
+    for name, limit in (("MAX_DIFF_CHARS", 50), ("MAX_FILE_CHARS", 10), ("MAX_BODY_CHARS", 100)):
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(module, name, limit)
+            with pytest.raises(ProposalError, match="in full"):
+                make(record)
+
+
 def test_a_stored_proposal_that_was_edited_is_refused(tmp_path: Path) -> None:
     setup = Setup(tmp_path)
     path = setup.directory / "pr-proposal.json"
