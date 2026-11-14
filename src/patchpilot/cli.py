@@ -22,6 +22,7 @@ from patchpilot.agent.trace import (
     text_digest,
 )
 from patchpilot.config import Settings
+from patchpilot.eval.benchmark import run_benchmark
 from patchpilot.eval.harness import (
     Mode,
     TaskRun,
@@ -63,7 +64,12 @@ from patchpilot.submit.approval import (
 )
 from patchpilot.submit.approval import approve as make_approval
 from patchpilot.submit.proposal import ProposalError, build_proposal, load_proposal, save_proposal
-from patchpilot.submit.submission import GitHubWriter, SubmissionError, submit_proposal
+from patchpilot.submit.submission import (
+    GitHubWriter,
+    SubmissionError,
+    load_submission,
+    submit_proposal,
+)
 from patchpilot.tasks.loader import TaskError, discover_tasks, load_task
 
 app = typer.Typer(
@@ -631,3 +637,102 @@ def submit(
         writer.close()
     typer.echo(f"draft pull request #{result.pull_request_number}: {result.pull_request_url}")
     typer.echo(f"branch {result.branch} at {result.commit_sha}; nothing was merged")
+
+
+@app.command()
+def benchmark(
+    scripted: Annotated[
+        bool, typer.Option("--scripted", help="Use the hand-written scripted answers. Required.")
+    ] = False,
+    scenario: Annotated[
+        list[str] | None, typer.Option(help="Run only these scenarios. Repeatable.")
+    ] = None,
+    output: Annotated[Path | None, typer.Option(help="Folder for the results.")] = None,
+    tasks_root: Annotated[Path, typer.Option(help="Folder holding the tasks.")] = TASKS_ROOT,
+) -> None:
+    """Compare baseline and repair on every task with scripted answers. Offline, free.
+
+    Results are labelled scripted: they exercise the pipeline and are not a
+    model's success rate. A live benchmark needs the owner's authorization.
+    """
+    if not scripted:
+        raise _refuse("only the scripted benchmark exists; pass --scripted")
+    settings = _settings()
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    directory = output or settings.runs_dir / f"benchmark-{stamp}"
+    try:
+        tasks = discover_tasks(tasks_root)
+    except TaskError as error:
+        raise _refuse(str(error)) from None
+    result = run_benchmark(
+        tasks,
+        _ready_sandbox(),
+        directory,
+        scripted_root=tasks_root.parent / "scripted",
+        only=tuple(scenario or ()),
+    )
+    typer.echo(result["label"])
+    for mode, summary in result["summary"].items():
+        typer.echo(
+            f"{mode}: {summary['resolved_by_hidden_tests']} of {summary['runs']} resolved, "
+            f"{summary['verified_by_agent']} verified by the agent"
+        )
+    typer.echo(f"results: {directory / 'benchmark.json'} and {directory / 'benchmark.md'}")
+
+
+def _grading(resolved: object) -> str:
+    if resolved is None:
+        return "not graded"
+    return "resolved" if resolved else "not resolved"
+
+
+@app.command()
+def show(run_dir: Annotated[Path, typer.Argument(help="Directory of a run.")]) -> None:
+    """Explain what happened in a run: mode, proposals, budgets, grading, submission."""
+    settings = _settings()
+    directory = _run_directory(settings, run_dir)
+    lines: list[str] = []
+    record_path = directory / "record.json"
+    if record_path.is_file():
+        payload = json.loads(record_path.read_text())
+        record = RunRecord.model_validate(payload["record"])
+        graded = payload.get("resolved")
+        lines += [
+            f"run {record.run_id}, task {record.task_id}, mode {record.mode}",
+            f"status: {record.status.value}: {record.detail[:300]}",
+            f"proposals: {len(record.attempts) or (1 if record.proposal else 0)}",
+            *[
+                f"  {number}. {attempt.status.value}: {attempt.detail[:120]}"
+                for number, attempt in enumerate(record.attempts, start=1)
+            ],
+            f"model turns {record.model_turns}, generation attempts {record.generation_attempts}, "
+            f"tool calls {record.tool_calls}, ledger ${usd(record.cost_micro_usd):.4f}",
+            f"hidden tests: {_grading(graded)}",
+        ]
+    else:
+        lines.append("no record: the run did not finish")
+    try:
+        checkpoint = load_checkpoint(directory)
+        state = checkpoint.state
+        lines.append(
+            f"checkpoint {checkpoint.sequence}: phase {state.phase}, proposal {state.attempt}"
+        )
+    except CheckpointError:
+        lines.append("checkpoint: none")
+    for name, label in (
+        ("pr-proposal.json", "pull request proposal"),
+        ("approval.json", "approval"),
+    ):
+        lines.append(f"{label}: {'present' if (directory / name).is_file() else 'none'}")
+    try:
+        submitted = load_submission(directory)
+    except SubmissionError as error:
+        lines.append(f"submission: unreadable ({error})")
+    else:
+        if submitted is None:
+            lines.append("submission: none")
+        else:
+            pull = submitted.pull_request_url or "no pull request"
+            lines.append(f"submission: {submitted.state}, {pull}")
+    for line in lines:
+        typer.echo(line)

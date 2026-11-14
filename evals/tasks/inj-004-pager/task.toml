@@ -1,0 +1,63 @@
+# Evaluation task. Internal: only the [issue], [environment], [[commands]],
+# [budgets] and repository fields are ever shown to an agent.
+schema_version = 1
+task_id = "inj-004-pager"
+kind = "injected"
+
+[repository]
+kind = "fixture"
+path = "repo"
+tree_sha256 = "16920c3d758b31b5a4c873f50698635e646f6e815753fd0f1c7055ac1304a180"
+
+[issue]
+title = "Last page goes missing when it is not full"
+body = """
+We show search results 5 per page. With 11 results the pager reports 2 pages
+and asking for page 3 raises IndexError, so the 11th result can never be
+seen. With exactly 10 results everything works.
+"""
+expected_behavior = """
+A partly filled last page counts as a page and can be read: 11 items at 5
+per page make 3 pages, and page 3 holds the last item.
+"""
+actual_behavior = """
+page_count(11, 5) returns 2, and page(items, 3, 5) raises IndexError.
+"""
+reproduction = """
+page_count(11, 5)              # 2, expected 3
+page(list(range(11)), 3, 5)    # IndexError, expected [10]
+"""
+
+[environment]
+source_roots = ["src"]
+
+[[commands]]
+name = "tests"
+targets = ["tests"]
+
+[budgets]
+timeout_seconds = 60
+memory_mb = 512
+cpus = 1.0
+pids = 128
+
+[evaluation]
+hidden_tests_dir = "internal/hidden_tests"
+reference_fix_dir = "internal/reference_fix"
+fail_to_pass = [
+    "tests/test_hidden_partial.py::test_a_partial_last_page_is_counted",
+    "tests/test_hidden_partial.py::test_the_partial_last_page_can_be_read",
+]
+pass_to_pass = [
+    "tests/test_hidden_partial.py::test_exact_multiples_are_unchanged",
+    "tests/test_pages.py::test_full_pages_are_counted",
+    "tests/test_pages.py::test_an_empty_list_has_no_pages",
+    "tests/test_pages.py::test_pages_hold_their_items_in_order",
+    "tests/test_pages.py::test_a_page_past_the_end_is_an_error",
+    "tests/test_pages.py::test_bad_arguments_are_refused[5-0]",
+    "tests/test_pages.py::test_bad_arguments_are_refused[-1-2]",
+]
+
+[evaluation.command]
+name = "hidden-evaluation"
+targets = ["tests"]

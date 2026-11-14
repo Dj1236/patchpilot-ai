@@ -187,6 +187,31 @@ def test_proposal_content_holds_no_secret_hidden_result_or_live_markup(tmp_path:
         make(verified(tmp_path / "s", edits=[leaking]), secrets=(SECRET,))
 
 
+def test_a_proposal_is_never_cut_for_review(tmp_path: Path) -> None:
+    from patchpilot.submit import proposal as module
+
+    setup = Setup(tmp_path)
+    review = (setup.directory / "pr-proposal.md").read_text()
+    for change in setup.proposal.changes:
+        assert change.content in review and change.sha256 in review
+
+    record = verified(tmp_path / "big")
+    for name, limit in (("MAX_DIFF_CHARS", 50), ("MAX_FILE_CHARS", 10), ("MAX_BODY_CHARS", 100)):
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(module, name, limit)
+            with pytest.raises(ProposalError, match="in full"):
+                make(record)
+
+
+@pytest.mark.parametrize("hidden", ["\u202e", "\u200b", "\x1b[2K", "\r", "\U000e0041"])
+def test_a_change_that_would_display_differently_is_refused(tmp_path: Path, hidden: str) -> None:
+    edit = {"path": "src/pkg/core.py", "expected_original": "    return None\n"}
+    edit["replacement"] = f"    return sum(items)  # ok{hidden}\n"
+
+    with pytest.raises(ProposalError, match="invisible, direction or control"):
+        make(verified(tmp_path, edits=[edit]))
+
+
 def test_a_stored_proposal_that_was_edited_is_refused(tmp_path: Path) -> None:
     setup = Setup(tmp_path)
     path = setup.directory / "pr-proposal.json"

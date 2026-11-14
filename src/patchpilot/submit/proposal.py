@@ -13,6 +13,7 @@ model's prompts or any credential: grading stays private to PatchPilot.
 import hashlib
 import json
 import os
+import unicodedata
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,7 @@ from patchpilot.agent.trace import redact
 from patchpilot.agent.verify import VerificationStep
 from patchpilot.intake.allowlist import ApprovedRepository
 from patchpilot.intake.github import is_safe_branch_name
+from patchpilot.intake.text import _INVISIBLE
 from patchpilot.patch.apply import PatchError, apply_proposal, unified_diff
 from patchpilot.patch.policy import check_policy
 from patchpilot.sandbox.models import FrozenModel
@@ -36,6 +38,9 @@ PROPOSAL_FILE = "pr-proposal.json"
 PROPOSAL_SUMMARY_FILE = "pr-proposal.md"
 OPERATION = "create_draft_pull_request"
 MAX_BODY_CHARS = 60_000
+# What a reviewer must see in full. Larger proposals are refused, never cut.
+MAX_DIFF_CHARS = 20_000
+MAX_FILE_CHARS = 100_000
 _SHA = r"^[0-9a-f]{40}$"
 
 
@@ -74,6 +79,20 @@ class PullRequestProposal(FrozenModel):
     operation: Literal["create_draft_pull_request"] = "create_draft_pull_request"
     operations: tuple[str, ...]
     created_at: datetime
+
+
+def _hidden_characters(text: str) -> bool:
+    """True if ``text`` holds characters that display differently from what they are.
+
+    Control characters other than newline and tab, and invisible or
+    direction-changing characters, would let the reviewed text differ from
+    the pushed bytes.
+    """
+    return any(
+        ord(char) in _INVISIBLE
+        or (unicodedata.category(char).startswith("C") and char not in "\n\t")
+        for char in text
+    )
 
 
 def _sha256(data: bytes) -> str:
@@ -143,7 +162,10 @@ def _body(record: RunRecord, issue: int, changes: tuple[FileChange, ...], diff: 
         _fenced(diff, "diff"),
         "",
     ]
-    return "\n".join(lines)[:MAX_BODY_CHARS]
+    body = "\n".join(lines)
+    if len(body) > MAX_BODY_CHARS:
+        raise ProposalError("the pull request body would be too long to show in full")
+    return body
 
 
 def build_proposal(
@@ -178,6 +200,8 @@ def build_proposal(
     except PatchError as error:
         raise ProposalError(f"the run's patch no longer applies: {error.code}") from None
     diff = unified_diff(files, patched)
+    if len(diff) > MAX_DIFF_CHARS:
+        raise ProposalError("the diff is too large to review in full; it is not proposed")
     if diff != record.diff:
         raise ProposalError("re-applying the patch does not give the recorded diff")
     if check_policy(files, change, patched, RunLimits().policy):
@@ -194,6 +218,12 @@ def build_proposal(
         for path in sorted(patched)
         if patched[path] != files.get(path)
     )
+    if any(_hidden_characters(c.content) for c in changes):
+        raise ProposalError(
+            "a changed file holds invisible, direction or control characters; it is not proposed"
+        )
+    if any(len(c.content) > MAX_FILE_CHARS for c in changes):
+        raise ProposalError("a changed file is too large to review in full; it is not proposed")
     if any(redact(c.content, known) != c.content for c in changes):
         raise ProposalError("a changed file contains a known secret; it is not proposed")
     digest = patch_digest(base_commit, changes)
@@ -238,6 +268,16 @@ def write_private(path: Path, text: str) -> None:
     temporary.replace(path)
 
 
+def _full_fence(text: str) -> str:
+    """Fence ``text`` without shortening it: a reviewer sees every character pushed."""
+    longest, run = 0, 0
+    for char in text:
+        run = run + 1 if char == "`" else 0
+        longest = max(longest, run)
+    fence = "`" * max(3, longest + 1)
+    return f"{fence}\n{text}{'' if text.endswith(chr(10)) else chr(10)}{fence}"
+
+
 def save_proposal(directory: Path, proposal: PullRequestProposal) -> None:
     write_private(directory / PROPOSAL_FILE, canonical(proposal).decode() + "\n")
     summary = "\n".join(
@@ -254,6 +294,14 @@ def save_proposal(directory: Path, proposal: PullRequestProposal) -> None:
             *[f"{index}. {item}" for index, item in enumerate(proposal.operations, start=1)],
             "",
             f"## Title\n\n{proposal.title}\n\n## Body\n\n{proposal.body}",
+            "",
+            "## Every changed file, in full, as it will be pushed",
+            "",
+            *[
+                f"### `{change.path}` ({change.action}, sha256 `{change.sha256}`)\n\n"
+                f"{_full_fence(change.content)}\n"
+                for change in proposal.changes
+            ],
         ]
     )
     write_private(directory / PROPOSAL_SUMMARY_FILE, summary)

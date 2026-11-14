@@ -15,6 +15,7 @@ import patchpilot.cli as cli
 from patchpilot.agent.checkpoint import load_checkpoint
 from patchpilot.agent.trace import TRACE_FILE
 from patchpilot.submit.proposal import load_proposal
+from patchpilot.tasks import LoadedTask, load_task
 from tests.fake_github import BASE_COMMIT, NAME, OWNER, REPOSITORY_ID, TOKEN, FakeGitHub
 from tests.integration.test_baseline_tasks import TASKS_ROOT
 from tests.integration.test_resume_tasks import Processes
@@ -22,14 +23,19 @@ from tests.integration.test_resume_tasks import Processes
 pytestmark = pytest.mark.sandbox
 
 
+@pytest.fixture
+def task() -> LoadedTask:
+    return load_task(TASKS_ROOT / "inj-001-cachekit")
+
+
 def test_a_repaired_run_becomes_one_approved_draft_pull_request(
     sandbox: object,
-    cachekit_fixture: object,
+    task: LoadedTask,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runs = tmp_path / "runs"
-    processes = Processes(cachekit_fixture, sandbox, runs)  # type: ignore[arg-type]
+    processes = Processes(task, sandbox, runs)  # type: ignore[arg-type]
     assert processes.start(interrupt_after=5) is None
     graded = processes.resume()
     assert graded is not None and graded.resolved
@@ -65,7 +71,7 @@ def test_a_repaired_run_becomes_one_approved_draft_pull_request(
     assert github.files_on(proposal.branch)["src/cachekit/lru.py"].count(b"move_to_end(key)") >= 1
     assert load_checkpoint(processes.directory).state.phase == "done"
     sent = "".join(github.bodies) + proposal.model_dump_json()
-    for content in cachekit_fixture.hidden_test_files().values():  # type: ignore[attr-defined]
+    for content in task.hidden_test_files().values():
         for line in content.decode().splitlines():
             if len(line) > 40:
                 assert line not in sent, line

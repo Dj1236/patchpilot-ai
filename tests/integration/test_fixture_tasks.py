@@ -10,11 +10,25 @@ from patchpilot.tasks import grade_candidate, load_task, verify_fixture
 pytestmark = pytest.mark.sandbox
 
 TASKS_ROOT = Path(__file__).resolve().parents[2] / "evals" / "tasks"
-TASK_IDS = ["inj-001-cachekit", "inj-002-exprcalc"]
+TASK_IDS = ["inj-001-cachekit", "inj-002-exprcalc", "inj-003-rangespec", "inj-004-pager"]
 
 # A plausible but wrong patch for each task: it makes the reported example
 # work without fixing the underlying behavior.
 WRONG_FIXES = {
+    # Refuses reversed ranges but still accepts ranges starting at 0.
+    "inj-003-rangespec": (
+        "src/rangespec/parse.py",
+        "            pages.update(range(start, end + 1))\n",
+        "            if end < start:\n"
+        '                raise ValueError("reversed range")\n'
+        "            pages.update(range(start, end + 1))\n",
+    ),
+    # Rounds up, but also counts an extra page for exact multiples.
+    "inj-004-pager": (
+        "src/pager/pages.py",
+        "    return total // size\n",
+        "    return total // size + 1 if total else 0\n",
+    ),
     "inj-001-cachekit": (
         "src/cachekit/lru.py",
         "        if key in self._entries:\n"

@@ -39,6 +39,9 @@ class TaskRun(FrozenModel):
     resolved: bool
     grade_trustworthy: bool | None
     localization_hit: bool | None
+    # Hidden-test detail: fail-to-pass tests now passing, pass-to-pass tests kept.
+    fail_to_pass: tuple[int, int] | None = None
+    pass_to_pass: tuple[int, int] | None = None
 
 
 class EvalSummary(FrozenModel):
@@ -180,9 +183,20 @@ def _grade(
     resolved = False
     trustworthy: bool | None = None
     localization: bool | None = None
+    fail_to_pass: tuple[int, int] | None = None
+    pass_to_pass: tuple[int, int] | None = None
     if patched is not None:
         grade, _ = grade_candidate(loaded, patched, sandbox)
         resolved, trustworthy = grade.resolved, grade.trustworthy
+        evaluation = loaded.task.evaluation
+        broken = set(grade.still_failing) | set(grade.missing)
+        targets = len(evaluation.fail_to_pass)
+        kept = len(evaluation.pass_to_pass)
+        fail_to_pass = (targets - len(broken & set(evaluation.fail_to_pass)), targets)
+        pass_to_pass = (
+            kept - len((set(grade.regressions) | broken) & set(evaluation.pass_to_pass)),
+            kept,
+        )
         fixed = {
             path
             for path, content in loaded.reference_fix_files().items()
@@ -198,6 +212,8 @@ def _grade(
         resolved=resolved,
         grade_trustworthy=trustworthy,
         localization_hit=localization,
+        fail_to_pass=fail_to_pass,
+        pass_to_pass=pass_to_pass,
     )
 
 

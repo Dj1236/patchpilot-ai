@@ -1,0 +1,11 @@
+{
+  "wrong": {
+    "path": "src/cachekit/lru.py",
+    "expected_original": "        if key in self._entries:\n            self._entries[key] = (value, expires_at)\n            return\n",
+    "replacement": "        if key in self._entries:\n            self._entries[key] = (value, expires_at)\n            self.hits += 0\n            return\n"
+  },
+  "regression_test": {
+    "path": "tests/test_rewrite_recency.py",
+    "content": "from cachekit import LRUCache\n\n\ndef test_rewritten_key_survives_eviction():\n    cache = LRUCache(capacity=2)\n    cache.put('a', 1)\n    cache.put('b', 2)\n    cache.put('a', 3)\n    cache.put('c', 4)\n    assert 'a' in cache\n"
+  }
+}
