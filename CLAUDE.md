@@ -57,6 +57,8 @@ uv run patchpilot resume <run dir> --replay <trace>   # continue a stopped repai
   sandbox verification, traces, reports.
 - `src/patchpilot/patch/`: safe edit application, diff, patch policy.
 - `src/patchpilot/eval/`: evaluation harness.
+- `src/patchpilot/submit/`: pull request proposal, approval and the
+  approval-gated GitHub writer.
 - `src/patchpilot/repo/`: hardened git fetch without checkout, in-memory
   snapshot, read-only tools with budgets.
 - `evals/tasks/`: evaluation tasks. `repo/` is agent-visible; `internal/`
@@ -117,7 +119,12 @@ uv run patchpilot resume <run dir> --replay <trace>   # continue a stopped repai
   tests; never run hidden tests on a tree the candidate assembled.
 - **Never weaken a sandbox restriction to make a test pass.** Security tests
   must attack the real container, not check flags.
-- **No GitHub write without explicit approval.**
+- **No GitHub write without explicit approval.** Only `patchpilot submit`
+  writes, only after `patchpilot approve` bound a person's approval to the exact
+  proposal, and only drafts. Never add a merge, ref update, force push or
+  write to a default branch. Never run `submit` against real GitHub, or create
+  a write token, without the owner's go-ahead for that submission. Tests use
+  `tests/fake_github.py`.
 - **Secrets stay out of git, logs, traces and sandboxes.** `.env` is
   ignored; `.env.example` lists names only.
 

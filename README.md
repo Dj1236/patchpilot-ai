@@ -24,7 +24,7 @@ answered every request with HTTP 503, so there is no live result yet.
 | 4. Intake and repository tools | Built and verified locally; not yet run on Linux CI |
 | 5. Baseline end to end, plus evaluator | Built and verified locally with a scripted model; live pilot not run |
 | 6. Stateful repair loop | Loop, checkpoints and resume built and verified offline with scripted models ([details](docs/repair-loop.md)); no live comparison yet |
-| 7. Report and approval-gated draft PR | Not started |
+| 7. Report and approval-gated draft PR | Built and verified offline against a fake GitHub ([details](docs/github-submission.md)); no real write made |
 | 8. Evaluation and release | Not started |
 
 ## Design
