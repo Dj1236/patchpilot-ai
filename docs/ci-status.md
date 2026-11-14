@@ -17,6 +17,14 @@ actions allowed. The restriction is at account level (likely billing or a
 spending limit); fixing it needs the owner in GitHub's account settings.
 The same exception now covers Milestones 6 to 8.
 
+**Cause confirmed on 2026-11-14:** after the repository became public, runs
+are created with a job instead of failing at start-up, but the job ends
+`failure` with no steps run. GitHub's annotation on the job reads: "The job
+was not started because your account is locked due to a billing issue."
+(runs `43571178275` for PR #20 and `43576231429` for its merge). No code
+ran, so this says nothing about the code. The owner must clear the billing
+lock at https://github.com/settings/billing; nothing in the repository can.
+
 ## Exception
 
 The project owner authorized Milestone 3 to proceed while this external
