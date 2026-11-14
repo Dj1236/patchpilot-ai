@@ -66,6 +66,8 @@ uv run patchpilot resume <run dir> --replay <trace>   # continue a stopped repai
 - `src/patchpilot/eval/`: evaluation harness.
 - `src/patchpilot/submit/`: pull request proposal, approval and the
   approval-gated GitHub writer.
+- `src/patchpilot/demo/`: the restricted live demo (FastAPI, synthetic
+  tasks only, local model). Deployment: `deploy/README.md`.
 - `src/patchpilot/repo/`: hardened git fetch without checkout, in-memory
   snapshot, read-only tools with budgets.
 - `evals/tasks/`: evaluation tasks. `repo/` is agent-visible; `internal/`

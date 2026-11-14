@@ -11,6 +11,10 @@ a local fake GitHub, and the real sandbox on a local Docker engine.
 | D. Hosted Linux CI | **Passed** | Run [`43586146851`](https://github.com/Dj1236/patchpilot-ai/actions/runs/43586146851) attempt 3 on `469074e`: ruff, format, strict mypy; 1,061 passed, 3 skipped, 1 expected failure; Docker sandbox and grading tests ran on Linux ([ci-status.md](ci-status.md)) | None | No |
 | E. Public portfolio release | **Passed, experimental** | Repository public; landing page at https://patchpilot-ai-site.vercel.app/; A, C and D passed | All five gates passed | Yes: any further publication |
 
+| Gate | Status | Evidence | Remaining action | Owner approval needed |
+|---|---|---|---|---|
+| F. Public online demo | **Built, not deployed** | `patchpilot.demo` (FastAPI) verified locally end to end with `qwen3:8b` and Docker: `inj-004-pager` resolved through the API in 33 s; `inj-003-rangespec` ended `invalid_proposal` after 3 proposals in the browser; 8 API tests for limits and failures ([deploy/README.md](../deploy/README.md)) | Create a host (Oracle Cloud Always Free or another Docker host), deploy, measure CPU-only run time, then link it from the website | Yes: account, host and public endpoint |
+
 ## What may proceed without approval
 
 - Re-running gate A locally after any change.

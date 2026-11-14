@@ -1,0 +1,13 @@
+# Replace demo.example.org with your domain (or the VM's sslip.io name).
+demo.example.org {
+	encode gzip
+	request_body {
+		max_size 4KB
+	}
+	reverse_proxy 127.0.0.1:8090
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+	}
+}
