@@ -46,9 +46,9 @@ Four synthetic tasks (state, logic, validation, edge case) with hidden tests
 and reference fixes. A scripted benchmark runs five scenarios per task in
 both modes through the real sandbox and grading: baseline resolves 8 of 20,
 repair 16 of 20. **These are hand-written answers that exercise the
-pipeline, not a model's success rate.** A live run was attempted with
-free-tier Gemini; the provider answered every request with HTTP 503, so no
-model result exists yet.
+pipeline, not a model's success rate.** Free-tier Gemini answered every
+request with HTTP 503; one live repair with a local open-weight model
+(`qwen3:8b`) then resolved `inj-001-cachekit` on its second proposal.
 
 ## Lessons
 

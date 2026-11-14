@@ -24,12 +24,14 @@ ErrorKind = Literal[
     "connection",
     "api_error",
 ]
-Provider = Literal["anthropic", "gemini"]
+Provider = Literal["anthropic", "gemini", "ollama"]
 
 # The default model of each provider.
 PINNED_MODELS: dict[Provider, str] = {
     "anthropic": "claude-sonnet-5-5",
     "gemini": "gemini-3.8-flash",
+    # A local open-weight model, served by Ollama on this machine.
+    "ollama": "qwen3:8b",
 }
 
 # The only models a run may use. This is a list to choose from, not a
@@ -39,6 +41,7 @@ PINNED_MODELS: dict[Provider, str] = {
 APPROVED_MODELS: dict[Provider, tuple[str, ...]] = {
     "anthropic": ("claude-sonnet-5-5",),
     "gemini": ("gemini-3.8-flash", "gemini-3.6-flash"),
+    "ollama": ("qwen3:8b",),
 }
 
 

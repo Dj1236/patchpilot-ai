@@ -14,8 +14,10 @@ PatchPilot separates two kinds of evidence:
   pass-to-pass test to keep passing. Nothing from grading goes back to the
   agent.
 
-**No real model has completed a run.** Every result below comes from
-scripted, hand-written answers. They show what the pipeline does with known
+**One real-model run exists** and is reported separately in
+[live-model-run.md](live-model-run.md): a local `qwen3:8b` resolved
+`inj-001-cachekit` in repair mode. It is one run, not a success rate. Every
+result below comes from scripted, hand-written answers. They show what the pipeline does with known
 kinds of answers. They are not the success rate of any language model, and
 nothing here supports a claim about one.
 
@@ -98,6 +100,6 @@ Token counts and ledger figures in the JSON are the script's placeholders.
   in the set yet.
 - The answers are scripted by the same developer who wrote the tasks.
 - One run per task, scenario and mode; scripted runs are deterministic.
-- Nothing here is a model benchmark. The live comparison, three runs per
-  task and mode with one real model, is pending: every live request so far
-  was answered with HTTP 503 by the provider.
+- Nothing here is a model benchmark. A live comparison, several runs per
+  task and mode with one real model, has not been done; one live repair run
+  is recorded in [live-model-run.md](live-model-run.md).

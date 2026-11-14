@@ -56,6 +56,9 @@ PRICES: dict[str, Prices] = {
     # Same published list prices as 3.8 Flash, read from the pricing page on
     # 2026-11-13, and bounded the same way.
     "gemini-3.6-flash": Prices(input=2, output=8, cache_write=2, cache_read=0.15),
+    # Local inference through Ollama: no per-request charge. Requests are still
+    # reserved and settled, and every token and attempt limit still applies.
+    "qwen3:8b": Prices(input=0, output=0, cache_write=0, cache_read=0),
 }
 
 

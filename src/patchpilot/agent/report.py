@@ -28,7 +28,8 @@ _FREE_TIER_NOTE = {
     "gemini": (
         " (list-price upper bound; the free tier charges nothing unless the key's "
         "project has billing enabled)"
-    )
+    ),
+    "ollama": " (local inference: no API charge; compute time is not metered in dollars)",
 }
 
 _MODE_MEANING = {

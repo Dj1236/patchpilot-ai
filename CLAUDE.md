@@ -22,7 +22,8 @@ not adopted (decision 15). Milestone 7 (approval-gated draft PRs,
 `docs/github-submission.md`) and the offline part of Milestone 8 (four tasks,
 `patchpilot benchmark --scripted`, security review, release docs) are done.
 One real draft PR was validated on a private synthetic repository (gate C).
-Still open: any live model result (gate B). See
+Gate B passed with one live repair by a local model (`PATCHPILOT_PROVIDER=ollama`,
+`qwen3:8b`, `docs/live-model-run.md`). All five gates are passed. See
 `docs/release-checklist.md`.
 PatchPilot does not load `.env`; the key comes from the process environment.
 Milestone 6 is not started and waits for measured live results. Hosted Linux CI passed on `469074e` (run 43586146851,

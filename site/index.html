@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PatchPilot AI</title>
-<meta name="description" content="PatchPilot AI: an autonomous Python repair agent whose safety is enforced in code. Built and verified offline with scripted model answers; no real model has completed a run yet.">
+<meta name="description" content="PatchPilot AI: an autonomous Python repair agent whose safety is enforced in code. Verified with scripted answers, hosted CI, one approved draft PR and one real repair by a local open-weight model.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#07090b">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1318'/%3E%3Cpath d='M9 22V10h7a4 4 0 0 1 0 8h-7' fill='none' stroke='%235ee6d0' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='22.5' cy='22' r='2.4' fill='%235ad19a'/%3E%3C/svg%3E">
@@ -87,7 +87,7 @@
       <a class="btn btn-primary magnetic dir-fill" href="https://github.com/Dj1236/patchpilot-ai" data-cursor="github"><span>View on GitHub</span><span class="arrow" aria-hidden="true">↗</span></a>
       <a class="btn btn-ghost magnetic dir-fill" href="#architecture" data-cursor="explore"><span>Explore the architecture</span><span class="arrow" aria-hidden="true">↓</span></a>
     </div>
-    <p class="hero-status"><span class="dot dot-ok" aria-hidden="true"></span>Built and verified offline <span class="sep" aria-hidden="true">/</span> <span class="dot dot-warn" aria-hidden="true"></span>no real-model run yet</p>
+    <p class="hero-status"><span class="dot dot-ok" aria-hidden="true"></span>Built and verified offline <span class="sep" aria-hidden="true">/</span> <span class="dot dot-warn" aria-hidden="true"></span>one real-model repair, local <code>qwen3:8b</code></p>
 
     <figure class="evidence" aria-labelledby="evidence-cap">
       <div class="ev-bar-top">
@@ -446,13 +446,14 @@
   <div class="wrap">
     <header class="section-head">
       <p class="label mono" data-scramble>current status</p>
-      <h2 id="status-title" class="split">Released as an experimental, offline-validated system.</h2>
+      <h2 id="status-title" class="split">All five release gates passed. Still experimental.</h2>
     </header>
     <div class="st-grid">
       <article class="st st-ok spot">
         <h3><span class="dot dot-ok" aria-hidden="true"></span>Verified</h3>
         <ul>
           <li>1,061 tests pass (3 skipped, 1 expected failure), 94% coverage, Ruff and strict mypy clean</li>
+          <li>One live repair by local <code>qwen3:8b</code>: 5 tool calls, a rejected first proposal, then a fix the hidden tests confirmed</li>
           <li>Hosted Linux CI passed on <code>469074e</code>, Docker sandbox and grading tests included</li>
           <li>One approved draft PR on a private synthetic repository: branch matched the proposal byte for byte; a second submission created nothing</li>
           <li>Sandbox limits attacked in a real Docker container, locally and on Linux CI</li>
@@ -464,21 +465,22 @@
       <article class="st st-sim spot">
         <h3><span class="dot dot-sim" aria-hidden="true"></span>Simulated</h3>
         <ul>
-          <li><b>Model:</b> scripted, hand-written answers in every completed run</li>
+          <li><b>Model:</b> scripted, hand-written answers in the benchmark, the replay and the tests</li>
           <li><b>GitHub in tests:</b> a local fake GitHub API (<code>tests/fake_github.py</code>) covers failures and reconciliation</li>
         </ul>
       </article>
       <article class="st st-pend spot">
         <h3><span class="dot dot-warn" aria-hidden="true"></span>Pending</h3>
         <ul>
-          <li><b>Real model:</b> all 8 live Gemini generation requests got HTTP 503; no model output or graded result yet</li>
+          <li><b>Model benchmark:</b> one live run only; no multi-run, multi-task real-model success rate</li>
+          <li><b>Hosted models:</b> free-tier Gemini answered all 9 requests with HTTP 503</li>
           <li><b>Real tasks:</b> the four tasks are synthetic</li>
         </ul>
       </article>
     </div>
     <ol class="gate-list">
       <li class="g-ok"><b>A</b><span>Offline engineering</span><em>passed</em></li>
-      <li class="g-block"><b>B</b><span>Real-model validation</span><em>blocked · HTTP 503</em></li>
+      <li class="g-ok"><b>B</b><span>Real-model validation</span><em>passed · one local run</em></li>
       <li class="g-ok"><b>C</b><span>Real GitHub draft PR</span><em>passed · approved draft PR</em></li>
       <li class="g-ok"><b>D</b><span>Hosted Linux CI</span><em>passed · run 43586146851</em></li>
       <li class="g-ok"><b>E</b><span>Public release</span><em>passed · experimental</em></li>

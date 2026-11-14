@@ -23,7 +23,7 @@ export variables in the shell that starts it. See `.env.example`.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PATCHPILOT_PROVIDER` | `anthropic` | `anthropic` or `gemini` |
+| `PATCHPILOT_PROVIDER` | `anthropic` | `anthropic`, `gemini`, or `ollama` (local `qwen3:8b` at `127.0.0.1:11434`, no key) |
 | `PATCHPILOT_GEMINI_MODEL` | `gemini-3.8-flash` | Or `gemini-3.6-flash`; nothing else is accepted |
 | `PATCHPILOT_GEMINI_FREE_TIER_CONFIRMED` | off | The owner's statement that the Gemini key's project has no billing |
 | `PATCHPILOT_MAX_ATTEMPTS` | 3 | Proposals in a repair run, at most 5 |
