@@ -49,16 +49,45 @@ def test_page_loads_nothing_from_the_network() -> None:
     for tag in re.findall(r"<(?:script|link|img|iframe|source)\b[^>]*>", page):
         for url in re.findall(r'(?:src|href)="([^"]+)"', tag):
             assert not re.match(r"(?:https?:)?//", url), tag
-    script = (SITE / "assets" / "app.js").read_text()
-    assert not re.search(r"\b(?:fetch|XMLHttpRequest|WebSocket|sendBeacon)\b", script)
-    assert "@import" not in (SITE / "assets" / "styles.css").read_text()
+    for module in sorted((SITE / "assets" / "js").glob("*.js")):
+        script = module.read_text()
+        assert not re.search(r"\b(?:fetch|XMLHttpRequest|WebSocket|sendBeacon)\b", script), module
+        for spec in re.findall(r"(?:from|import\()\s*'([^']+)'", script):
+            assert spec == "three" or spec.startswith("./"), (module, spec)
+    importmap = re.search(r'<script type="importmap">(.*?)</script>', page, re.DOTALL)
+    assert importmap, "the page maps three to the vendored build"
+    assert set(json.loads(importmap[1])["imports"].values()) == {"./vendor/three.module.min.js"}
+    styles = (SITE / "assets" / "styles.css").read_text()
+    assert "@import" not in styles
+    for url in re.findall(r"url\(([^)]+)\)", styles):
+        assert not re.match(r"[\"']?(?:https?:)?//", url), url
 
 
 def test_every_repository_path_the_page_names_exists() -> None:
-    text = "\n".join((SITE / name).read_text() for name in ("index.html", "assets/app.js"))
+    sources = [SITE / "index.html", *sorted((SITE / "assets" / "js").glob("*.js"))]
+    text = "\n".join(path.read_text() for path in sources)
     pattern = r"\b((?:src/patchpilot|tests|evals/results|docs)/[\w./-]*\w)"
     # The replay's regression test is a file the scripted proposal adds to the fixture.
     paths = set(re.findall(pattern, text)) - {"tests/test_rewrite_recency.py"}
     assert paths, "the page should cite repository files"
-    missing = sorted(path for path in paths if not (ROOT / path).exists())
+    fixture = ROOT / "evals" / "tasks" / "inj-001-cachekit" / "repo"  # the replay's repository
+    missing = sorted(p for p in paths if not (ROOT / p).exists() and not (fixture / p).exists())
     assert not missing, missing
+
+
+def test_every_local_asset_the_page_loads_exists() -> None:
+    page = (SITE / "index.html").read_text()
+    local = re.findall(r'(?:src|href)="((?:assets|vendor)/[^"]+)"', page)
+    assert local
+    missing = [path for path in local if not (SITE / path).exists()]
+    assert not missing, missing
+
+
+def test_vendored_files_carry_their_licenses() -> None:
+    vendor = SITE / "vendor"
+    assert "MIT License" in (vendor / "three.LICENSE").read_text()
+    for name in ("gsap.min.js", "ScrollTrigger.min.js", "SplitText.min.js"):
+        assert "https://gsap.com/standard-license" in (vendor / name).read_text()[:400], name
+    fonts = SITE / "assets" / "fonts"
+    for name in ("space-grotesk.OFL.txt", "jetbrains-mono.OFL.txt"):
+        assert "SIL Open Font License" in (fonts / name).read_text(), name

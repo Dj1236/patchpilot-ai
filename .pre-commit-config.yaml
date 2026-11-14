@@ -1,7 +1,7 @@
 # Local checks run before every commit. Ruff and mypy run through uv so they
 # use the exact versions pinned in uv.lock.
 # Evaluation fixtures are pinned by a content digest. No hook may rewrite them.
-exclude: ^evals/tasks/[^/]+/(repo|internal)/
+exclude: ^(evals/tasks/[^/]+/(repo|internal)/|site/vendor/)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks

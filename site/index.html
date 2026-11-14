@@ -6,12 +6,16 @@
 <title>PatchPilot AI</title>
 <meta name="description" content="PatchPilot AI: an autonomous Python repair agent whose safety is enforced in code. Built and verified offline with scripted model answers; no real model has completed a run yet.">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#0a0c0f">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1318'/%3E%3Cpath d='M9 22V10h7a4 4 0 0 1 0 8h-7' fill='none' stroke='%238fd3ff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='22.5' cy='22' r='2.4' fill='%235ad19a'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#07090b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1318'/%3E%3Cpath d='M9 22V10h7a4 4 0 0 1 0 8h-7' fill='none' stroke='%235ee6d0' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='22.5' cy='22' r='2.4' fill='%235ad19a'/%3E%3C/svg%3E">
+<link rel="preload" href="assets/fonts/space-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/styles.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
+<div class="progress" aria-hidden="true"><span id="read-progress"></span></div>
+<div class="cursor" aria-hidden="true"><span class="cursor-ring"></span><span class="cursor-label" id="cursor-label"></span></div>
 
 <header class="nav" id="top">
   <div class="wrap nav-inner">
@@ -19,276 +23,493 @@
       <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" class="brand-bg"/><path d="M9 22V10h7a4 4 0 0 1 0 8h-7" class="brand-p"/><circle cx="22.5" cy="22" r="2.4" class="brand-dot"/></svg>
       <span>PatchPilot <em>AI</em></span>
     </a>
-    <nav aria-label="Sections">
+    <nav aria-label="Sections" class="nav-links">
+      <a href="#story">Workflow</a>
       <a href="#architecture">Architecture</a>
       <a href="#replay">Replay</a>
       <a href="#engineering">Engineering</a>
       <a href="#evaluation">Evaluation</a>
       <a href="#status">Status</a>
+      <span class="nav-ind" aria-hidden="true"></span>
     </nav>
-    <a class="btn btn-ghost btn-sm" href="https://github.com/Dj1236/patchpilot-ai">
+    <a class="btn btn-ghost btn-sm magnetic" href="https://github.com/Dj1236/patchpilot-ai" data-cursor="open source">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.8.06 1.23.83 1.23.83.72 1.22 1.88.87 2.34.66.07-.52.28-.87.5-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.66 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0z"/></svg>
-      Source
+      <span>Source</span>
     </a>
   </div>
 </header>
 
 <main id="main">
 
-<!-- HERO -->
-<section class="hero">
-  <div class="wrap hero-grid">
-    <div class="hero-copy">
-      <p class="status-pill"><span class="dot dot-ok" aria-hidden="true"></span>Built and verified offline <span class="sep" aria-hidden="true">·</span> <span class="dot dot-warn" aria-hidden="true"></span>no real-model run yet</p>
-      <h1>An autonomous repair agent <span class="h1-sub">with the brakes built in.</span></h1>
-      <p class="lede">PatchPilot AI takes one bug report for an approved Python repository and returns one tested, reviewable patch. The model only reads and proposes. Allowlists, patch rules, budgets, the sandbox, grading and the approval gate are enforced in code outside it.</p>
-      <div class="cta">
-        <a class="btn btn-primary" href="#replay">Watch the scripted replay</a>
-        <a class="btn btn-ghost" href="#architecture">Explore the architecture</a>
-      </div>
-      <dl class="hero-facts">
-        <div><dt>Tests</dt><dd>1,054 passing locally</dd></div>
-        <div><dt>Coverage</dt><dd>94%</dd></div>
-        <div><dt>Typing</dt><dd>strict mypy</dd></div>
-      </dl>
+<!-- HERO: the Repair Core -->
+<section class="hero" id="hero" aria-labelledby="hero-title">
+  <div class="hero-scene" aria-hidden="true">
+    <canvas id="core-canvas"></canvas>
+    <svg class="core-fallback" viewBox="240 80 560 600" preserveAspectRatio="xMidYMid meet">
+      <defs><radialGradient id="cf-glow"><stop offset="0" stop-color="#5ee6d0" stop-opacity=".22"/><stop offset="1" stop-color="#5ee6d0" stop-opacity="0"/></radialGradient></defs>
+      <circle cx="560" cy="380" r="300" fill="url(#cf-glow)"/>
+      <g fill="none" stroke="#5ee6d0" stroke-opacity=".5">
+        <polygon points="560,250 672,315 672,445 560,510 448,445 448,315"/>
+        <polygon points="560,300 629,340 629,420 560,460 491,420 491,340" stroke-opacity=".8"/>
+        <ellipse cx="560" cy="380" rx="250" ry="90" stroke-opacity=".18"/>
+        <ellipse cx="560" cy="380" rx="200" ry="200" stroke-opacity=".08"/>
+      </g>
+      <g fill="#151a21" stroke="#29323d">
+        <rect x="318" y="350" width="34" height="22" rx="3"/><rect x="760" y="300" width="34" height="22" rx="3"/>
+        <rect x="430" y="560" width="34" height="22" rx="3"/><rect x="690" y="550" width="34" height="22" rx="3"/>
+        <rect x="380" y="200" width="34" height="22" rx="3"/><rect x="700" y="170" width="34" height="22" rx="3" stroke="#5ad19a"/>
+      </g>
+      <rect x="610" y="600" width="60" height="60" fill="none" stroke="#f2b552" stroke-opacity=".7" rx="4"/>
+      <polygon points="790,450 815,480 790,510 765,480" fill="none" stroke="#b49dff" stroke-opacity=".7"/>
+    </svg>
+    <div class="core-labels" id="core-labels">
+      <span data-anchor="repo">repository snapshot</span>
+      <span data-anchor="sandbox">sandbox</span>
+      <span data-anchor="eval">evaluator</span>
+      <span data-anchor="status" class="core-status" id="core-status">scanning</span>
     </div>
+  </div>
 
-    <figure class="console" aria-labelledby="console-cap">
-      <div class="console-bar">
+  <div class="wrap hero-inner">
+    <p class="boot mono" id="boot" aria-label="Start-up status">
+      <span class="boot-k">patchpilot</span>
+      <span class="boot-step" data-boot="fonts">fonts</span>
+      <span class="boot-step" data-boot="motion">motion</span>
+      <span class="boot-step" data-boot="core">repair core</span>
+    </p>
+    <h1 id="hero-title" class="hero-title">
+      <span class="ht-line">Bug report in.</span>
+      <span class="ht-line">Tested patch out.</span>
+      <span class="ht-line ht-dim">Brakes built in.</span>
+    </h1>
+    <p class="hero-lede">PatchPilot AI is an autonomous repair agent for approved Python repositories. The model only reads and proposes. Allowlists, patch rules, budgets, a locked-down sandbox, hidden-test grading and a human approval gate are enforced in code outside it.</p>
+    <div class="cta">
+      <a class="btn btn-primary magnetic dir-fill" href="https://github.com/Dj1236/patchpilot-ai" data-cursor="github"><span>View on GitHub</span><span class="arrow" aria-hidden="true">↗</span></a>
+      <a class="btn btn-ghost magnetic dir-fill" href="#architecture" data-cursor="explore"><span>Explore the architecture</span><span class="arrow" aria-hidden="true">↓</span></a>
+    </div>
+    <p class="hero-status"><span class="dot dot-ok" aria-hidden="true"></span>Built and verified offline <span class="sep" aria-hidden="true">/</span> <span class="dot dot-warn" aria-hidden="true"></span>no real-model run yet</p>
+
+    <figure class="evidence" aria-labelledby="evidence-cap">
+      <div class="ev-bar-top">
         <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span class="console-title">inj-001-cachekit · repair mode</span>
+        <span class="mono ev-title">inj-001-cachekit · repair mode</span>
         <span class="tag tag-warn">scripted</span>
       </div>
-      <ol class="console-body" id="hero-console">
-        <li class="cmd"><span class="pr">$</span> patchpilot benchmark --scripted --scenario wrong-then-right</li>
-        <li class="dimtxt">issue: “Frequently updated cache entry gets evicted”</li>
-        <li><span class="k">proposal 1</span><span>edit <span class="path">src/cachekit/lru.py</span> <span class="add">+1</span> · new regression test</span></li>
-        <li><span class="k">sandbox</span><span>original code: test fails <span class="ok">✓ held</span></span></li>
-        <li><span class="k"></span><span>patched code: test fails <span class="bad">✗ did not hold</span></span></li>
-        <li><span class="k">status</span><span><span class="warn">unverified</span> → feedback from own checks, 2 proposals left</span></li>
-        <li><span class="k">proposal 2</span><span>edit <span class="path">src/cachekit/lru.py</span> <span class="add">+1</span> <span class="dimtxt">move_to_end(key)</span></span></li>
-        <li><span class="k">sandbox</span><span>fails before ✓ · passes after ✓ · existing tests ✓</span></li>
-        <li><span class="k">status</span><span><span class="ok">candidate_verified</span> <span class="dimtxt">agent’s own evidence</span></span></li>
-        <li><span class="k">grading</span><span>hidden tests: fail-to-pass <b>3/3</b> · pass-to-pass <b>14/14</b> → <span class="ok">resolved</span></span></li>
+      <ol class="evidence-body mono" id="hero-console">
+        <li><span class="k">proposal 1</span><span>edit <b>src/cachekit/lru.py</b> <span class="add">+1</span> · new test</span></li>
+        <li><span class="k">sandbox</span><span>patched code: test fails <span class="bad">✗ rejected</span></span></li>
+        <li><span class="k">feedback</span><span>own checks only · <span class="warn">2 proposals left</span></span></li>
+        <li><span class="k">proposal 2</span><span><b>move_to_end(key)</b> <span class="add">+1</span></span></li>
+        <li><span class="k">sandbox</span><span>fails before ✓ passes after ✓ existing ✓</span></li>
+        <li><span class="k">grading</span><span>hidden tests <b>3/3</b> · <b>14/14</b> → <span class="ok">resolved</span></span></li>
       </ol>
-      <figcaption id="console-cap" class="console-cap">
-        <span>Rendered from a real offline run. The “model” is a script of hand-written answers.</span>
-        <button class="link-btn" type="button" id="hero-replay">Replay ↻</button>
-      </figcaption>
+      <figcaption id="evidence-cap" class="ev-cap">Recorded offline run. The “model” is a script of hand-written answers.</figcaption>
     </figure>
   </div>
+  <a class="scroll-cue" href="#story" aria-label="Scroll to the workflow"><span class="mono">scroll</span><i aria-hidden="true"></i></a>
 </section>
 
-<!-- PROBLEM -->
-<section class="section" id="problem" data-reveal>
+<!-- STORY -->
+<section class="story section" id="story" aria-labelledby="story-title">
   <div class="wrap">
     <header class="section-head">
-      <p class="eyebrow">Problem → control</p>
-      <h2>Generating a patch is the easy part.</h2>
-      <p class="section-lede">A language model can write a plausible fix in seconds. Trusting it is the hard problem: the fix may be wrong, the repository may be hostile, and a write to GitHub cannot be taken back. PatchPilot treats each of these as a boundary enforced in code, never as an instruction in a prompt.</p>
+      <p class="label mono" data-scramble>the workflow · seven scenes</p>
+      <h2 id="story-title" class="split">Generating a patch is the easy part. Trusting it is the work.</h2>
     </header>
-    <div class="pc-grid">
-      <article class="pc">
-        <h3><span class="pc-n">01</span>Plausible is not correct</h3>
-        <p class="pc-risk">The agent writes both the fix and the test that “proves” it.</p>
-        <p class="pc-ctl"><span>Control</span>Its own checks give only <code>candidate_verified</code>. Only hidden tests, run afterwards on a tree rebuilt from the pinned start, decide <code>resolved</code>.</p>
-      </article>
-      <article class="pc">
-        <h3><span class="pc-n">02</span>Code under repair is untrusted</h3>
-        <p class="pc-risk">Issue text, source files and test output can carry prompt injection or hostile code.</p>
-        <p class="pc-ctl"><span>Control</span>Text stays in labelled untrusted blocks. Code runs only in a container with no network, a read-only root and no credentials. The host never imports it.</p>
-      </article>
-      <article class="pc">
-        <h3><span class="pc-n">03</span>Autonomy needs bounds</h3>
-        <p class="pc-risk">Loops, retries and model switches can burn money and repeat side effects.</p>
-        <p class="pc-ctl"><span>Control</span>Every request is reserved in a spend ledger before it is sent. Turns, tool calls, proposals and time are capped. One model per process, no fallback.</p>
-      </article>
-      <article class="pc">
-        <h3><span class="pc-n">04</span>Writes need a person</h3>
-        <p class="pc-risk">An agent that can push can push the wrong thing to the wrong place.</p>
-        <p class="pc-ctl"><span>Control</span>A person approves the exact proposal by typing its digest. Only drafts, only one allowlisted repository, never a merge.</p>
-      </article>
+    <div class="story-grid">
+      <div class="story-rail" aria-hidden="true"><span class="rail-fill" id="rail-fill"></span></div>
+      <ol class="scenes">
+        <li class="scene" data-scene="1">
+          <div class="scene-text">
+            <p class="scene-n mono">01 · the problem</p>
+            <h3>A bug report arrives.</h3>
+            <p>Issue text is untrusted input. A plausible change can be written in seconds, but plausible is not correct, and the repository itself may be hostile.</p>
+          </div>
+          <figure class="scene-fig fig-issue">
+            <div class="issue">
+              <p class="issue-h"><span class="issue-dot" aria-hidden="true"></span>Frequently updated cache entry gets evicted</p>
+              <p class="issue-b">One sensor reports far more often than the others, so its entry is rewritten constantly with <code>put()</code>. Even so, that entry keeps disappearing from the cache…</p>
+              <p class="issue-tags mono"><span>untrusted text</span><span>inj-001-cachekit</span></p>
+            </div>
+          </figure>
+        </li>
+        <li class="scene" data-scene="2">
+          <div class="scene-text">
+            <p class="scene-n mono">02 · investigation</p>
+            <h3>Read a pinned snapshot, never a live checkout.</h3>
+            <p>The repository must be on an allowlist. Its commit is pinned and read from git objects. The model explores with four read-only tools and no shell.</p>
+          </div>
+          <figure class="scene-fig fig-tree">
+            <ul class="tree mono">
+              <li class="t-dir">cachekit/ <span class="dim">tree 5410f9e6…</span></li>
+              <li>README.md</li>
+              <li class="t-dir">src/cachekit/</li>
+              <li class="t-in">__init__.py</li>
+              <li class="t-in t-hot">lru.py <span class="hot">put()</span></li>
+              <li class="t-dir">tests/</li>
+              <li class="t-in">test_lru.py</li>
+            </ul>
+            <ul class="tools mono"><li>list_files</li><li>read_file</li><li>search_code</li><li>outline</li></ul>
+          </figure>
+        </li>
+        <li class="scene" data-scene="3">
+          <div class="scene-text">
+            <p class="scene-n mono">03 · first proposal</p>
+            <h3>One fix, one regression test.</h3>
+            <p>Edits are search-and-replace and must match exactly once. PatchPilot applies them and computes the diff itself. This one touches the right method and changes nothing that matters.</p>
+          </div>
+          <figure class="scene-fig fig-diff">
+            <pre class="mini-diff mono"><span class="h">src/cachekit/lru.py</span>
+<span>  if key in self._entries:</span>
+<span>      self._entries[key] = (value, expires_at)</span>
+<span class="a">+     self.hits += 0</span>
+<span>      return</span></pre>
+            <p class="fig-note mono">+ tests/test_rewrite_recency.py</p>
+          </figure>
+        </li>
+        <li class="scene" data-scene="4">
+          <div class="scene-text">
+            <p class="scene-n mono">04 · failure</p>
+            <h3>The sandbox rejects it.</h3>
+            <p>Both versions run in a container with no network and no credentials. The new test fails before the patch, as it should, and still fails after it. Not verified.</p>
+          </div>
+          <figure class="scene-fig fig-reject">
+            <div class="verdict">
+              <p class="mono v-row"><span>original code · test fails</span><b class="ok">held</b></p>
+              <p class="mono v-row"><span>patched code · test fails</span><b class="bad">did not hold</b></p>
+              <p class="stamp stamp-bad mono">unverified</p>
+            </div>
+          </figure>
+        </li>
+        <li class="scene" data-scene="5">
+          <div class="scene-text">
+            <p class="scene-n mono">05 · repair</p>
+            <h3>Feedback from its own checks, within a budget.</h3>
+            <p>In repair mode the model is told what its visible checks found, nothing from hidden tests, and tries again. At most five proposals, three by default, each applied to the original files.</p>
+          </div>
+          <figure class="scene-fig fig-loop">
+            <svg viewBox="0 0 300 300" class="loop-svg" aria-hidden="true">
+              <circle cx="150" cy="150" r="104" class="loop-track"/>
+              <circle cx="150" cy="150" r="104" class="loop-arc"/>
+              <g class="loop-node" transform="translate(150 46)"><circle r="7"/><text y="-16">proposal</text></g>
+              <g class="loop-node" transform="translate(254 150)"><circle r="7"/><text x="16" y="4" text-anchor="start">sandbox</text></g>
+              <g class="loop-node" transform="translate(150 254)"><circle r="7"/><text y="28">feedback</text></g>
+            </svg>
+            <p class="loop-count mono"><b>2</b> proposals left</p>
+          </figure>
+        </li>
+        <li class="scene" data-scene="6">
+          <div class="scene-text">
+            <p class="scene-n mono">06 · verification</p>
+            <h3>Verified by the agent. Then judged by someone else.</h3>
+            <p>The agent’s checks give only <code>candidate_verified</code>. After the run, hidden tests the agent never saw are added to a tree rebuilt from the pinned start. Only they decide <code>resolved</code>.</p>
+          </div>
+          <figure class="scene-fig fig-verify">
+            <pre class="mini-diff mono"><span class="a">+     self._entries.move_to_end(key)</span></pre>
+            <div class="scores">
+              <p><span class="mono">fail-to-pass</span><b>3/3</b></p>
+              <p><span class="mono">pass-to-pass</span><b>14/14</b></p>
+            </div>
+            <p class="stamp stamp-ok mono">resolved</p>
+          </figure>
+        </li>
+        <li class="scene" data-scene="7">
+          <div class="scene-text">
+            <p class="scene-n mono">07 · human approval</p>
+            <h3>A person, not the agent, authorizes the write.</h3>
+            <p>The proposal shows every changed file in full. A person approves it by typing the start of its patch digest. Only then can one draft pull request be opened. Nothing is ever merged.</p>
+          </div>
+          <figure class="scene-fig fig-approve">
+            <p class="digest-mini mono"><mark>3f9c2a7be1d4</mark>0c86a5e2f71b…</p>
+            <p class="approve-line mono"><span>approved by a person</span><span class="arrowline" aria-hidden="true"></span><span>draft PR</span></p>
+            <p class="fig-note mono">tested against a fake GitHub API only</p>
+          </figure>
+        </li>
+      </ol>
+      <div class="story-stage" aria-hidden="true"><div class="stage-frame" id="stage-frame"></div><p class="stage-n mono" id="stage-n">01 / 07</p></div>
     </div>
   </div>
 </section>
 
 <!-- ARCHITECTURE -->
-<section class="section" id="architecture" data-reveal>
+<section class="section arch-section" id="architecture" aria-labelledby="arch-title">
   <div class="wrap">
     <header class="section-head">
-      <p class="eyebrow">Interactive architecture</p>
-      <h2>Three trust zones, one direction of trust.</h2>
-      <p class="section-lede">The host orchestrator is trusted and never runs repository code. The sandbox is where untrusted code runs. The evaluator holds hidden tests the agent never sees. Pick a flow to trace it, or select any component for its rule and the tests behind it.</p>
+      <p class="label mono" data-scramble>interactive architecture</p>
+      <h2 id="arch-title" class="split">Three trust zones. One direction of trust.</h2>
+      <p class="section-lede">The host orchestrator is trusted and never runs repository code. The sandbox is where untrusted code runs. The evaluator holds hidden tests the agent never sees. Pick a flow to trace it, or select a component for its rule and the tests behind it.</p>
     </header>
-
     <div class="arch">
       <div class="arch-toolbar">
         <div class="segs" role="group" aria-label="Trace a flow">
+          <span class="seg-ind" aria-hidden="true"></span>
           <button type="button" class="seg" data-flow="baseline" aria-pressed="false">Baseline<span>one proposal</span></button>
           <button type="button" class="seg" data-flow="repair" aria-pressed="true">Repair loop<span>feedback, up to 5</span></button>
           <button type="button" class="seg" data-flow="submit" aria-pressed="false">Submission<span>approval-gated</span></button>
         </div>
-        <p class="arch-legend" aria-hidden="true">
-          <span><i class="lg lg-host"></i>Host</span><span><i class="lg lg-sandbox"></i>Sandbox</span><span><i class="lg lg-eval"></i>Evaluator</span><span><i class="lg lg-ext"></i>External</span>
-        </p>
+        <p class="arch-legend" aria-hidden="true"><span><i class="lg lg-host"></i>Host</span><span><i class="lg lg-sandbox"></i>Sandbox</span><span><i class="lg lg-eval"></i>Evaluator</span><span><i class="lg lg-ext"></i>External</span></p>
       </div>
-      <div class="arch-body">
-        <div class="arch-stage">
-          <svg id="arch-svg" role="group" aria-label="PatchPilot architecture diagram. Each component is a button that shows its details."></svg>
-        </div>
-        <aside class="arch-detail" id="arch-detail" aria-live="polite"></aside>
+      <div class="arch-stage" id="arch-stage">
+        <svg id="arch-svg" role="group" aria-label="PatchPilot architecture diagram. Each component is a button that shows its details."></svg>
       </div>
       <p class="arch-flowcap" id="arch-flowcap"></p>
+      <div class="arch-detail" id="arch-detail" aria-live="polite"></div>
     </div>
   </div>
 </section>
 
 <!-- REPLAY -->
-<section class="section" id="replay" data-reveal>
+<section class="section replay-section" id="replay" aria-labelledby="replay-title">
   <div class="wrap">
     <header class="section-head">
-      <p class="eyebrow">Agent workflow · scripted replay</p>
-      <h2>A wrong patch, caught and repaired.</h2>
-      <p class="section-lede">The repair-mode run of scenario <code>wrong-then-right</code> on task <code>inj-001-cachekit</code>. Every diff, check and feedback message below is taken from the recorded offline run. The answers were written by hand, so this shows the pipeline at work, not a model’s skill.</p>
+      <p class="label mono" data-scramble>scripted offline replay</p>
+      <h2 id="replay-title" class="split">A wrong patch, caught and repaired.</h2>
+      <p class="section-lede">The repair-mode run of scenario <code>wrong-then-right</code> on task <code>inj-001-cachekit</code>. Every diff, check and feedback message is taken from the recorded offline run. The answers were written by hand: this shows the pipeline at work, not a live model.</p>
     </header>
-
     <div class="replay">
       <ol class="rp-steps" id="rp-steps" aria-label="Replay steps"></ol>
       <div class="rp-panel">
         <div class="rp-panel-head">
-          <p class="rp-kicker" id="rp-kicker"></p>
+          <p class="rp-kicker mono" id="rp-kicker"></p>
           <div class="rp-controls">
-            <button type="button" class="icon-btn" id="rp-prev" aria-label="Previous step">←</button>
-            <button type="button" class="icon-btn" id="rp-play" aria-label="Play replay">▶</button>
-            <button type="button" class="icon-btn" id="rp-next" aria-label="Next step">→</button>
+            <button type="button" class="icon-btn" id="rp-prev" aria-label="Previous step"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg></button>
+            <button type="button" class="icon-btn icon-play" id="rp-play" aria-label="Play replay"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="i-play" d="M5 3v10l8-5z"/><path class="i-pause" d="M5 3v10M11 3v10"/></svg></button>
+            <button type="button" class="icon-btn" id="rp-next" aria-label="Next step"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
           </div>
         </div>
-        <div class="rp-progress" aria-hidden="true"><span id="rp-bar"></span></div>
+        <div class="rp-progress" aria-hidden="true"><span id="rp-bar"></span><span id="rp-timer"></span></div>
         <h3 class="rp-title" id="rp-title" tabindex="-1"></h3>
         <div class="rp-body" id="rp-body" aria-live="polite"></div>
+        <p class="rp-source mono">source · offline scripted run · inj-001-cachekit · wrong-then-right · repair mode</p>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ENGINEERING -->
-<section class="section" id="engineering" data-reveal>
+<section class="section eng" id="engineering" aria-labelledby="eng-title">
   <div class="wrap">
     <header class="section-head">
-      <p class="eyebrow">Engineering deep dive</p>
-      <h2>Every safety property has a test.</h2>
-      <p class="section-lede">The numbers below are the defaults in code. The security tests attack a real container, not configuration flags.</p>
+      <p class="label mono" data-scramble>engineering</p>
+      <h2 id="eng-title" class="split">Every safety property is code, and every control has a test.</h2>
+      <p class="section-lede">The values below are the defaults in code. The security tests attack a real container, not configuration flags.</p>
     </header>
-    <div class="dd">
-      <div class="dd-tabs" role="tablist" aria-label="Engineering topics" id="dd-tabs"></div>
-      <div class="dd-panels" id="dd-panels"></div>
-    </div>
+
+    <article class="eng-block contain" aria-labelledby="eng-contain">
+      <div class="eng-copy">
+        <p class="eng-k mono">01 · containment</p>
+        <h3 id="eng-contain">Sandbox isolation</h3>
+        <p>Repository code, including the candidate’s tests, runs only in a container. The host never imports or executes it, and test commands come from the task manifest, never from model output.</p>
+        <ul class="bul"><li>Network, writes outside the workspace, privilege, resource limits and leftover processes are attacked by tests in a real container</li><li class="lim">The container shares the host kernel</li><li class="lim">Tests can forge their own results in the same process (kept as a known, expected failure)</li></ul>
+      </div>
+      <div class="contain-vis">
+        <div class="box-host"><span class="box-label mono">host · trusted</span>
+          <div class="box-sandbox"><span class="box-label mono">container · untrusted</span>
+            <ul class="flags mono">
+              <li>--network none</li><li>--read-only</li><li>--user 10001:10001</li><li>--cap-drop ALL</li><li>no-new-privileges</li><li>--pids-limit 128</li>
+            </ul>
+            <div class="meters">
+              <p><span class="mono">memory</span><i style="--v:.25"></i><b class="mono">512 MB</b></p>
+              <p><span class="mono">cpu</span><i style="--v:.25"></i><b class="mono">1 core</b></p>
+              <p><span class="mono">time</span><i style="--v:.1"></i><b class="mono">60 s</b></p>
+              <p><span class="mono">output</span><i style="--v:.0625"></i><b class="mono">64 KiB</b></p>
+              <p class="meters-note mono">default per run · bar: share of the maximum the settings allow</p>
+            </div>
+          </div>
+          <p class="net-cut mono"><span>internet</span><i aria-hidden="true"></i><span class="bad">blocked</span></p>
+        </div>
+      </div>
+    </article>
+
+    <article class="eng-block bounds" aria-labelledby="eng-bounds">
+      <div class="eng-copy">
+        <p class="eng-k mono">02 · bounds</p>
+        <h3 id="eng-bounds">Tool boundaries, patch rules and budgets</h3>
+        <p>The model gets four read-only tools and no shell. Paths are confined to the snapshot. Proposals are checked against the patch policy before anything runs. Every loop has a ceiling, enforced outside the model.</p>
+      </div>
+      <div class="term-panel">
+        <p class="term-h mono">calls from the scripted benchmark scenarios</p>
+        <ol class="calls mono">
+          <li><span>list_files {"prefix": "internal"}</span><b class="v-no">error · nothing returned</b></li>
+          <li><span>read_file {"path": "../internal/hidden_tests/README"}</span><b class="v-no">error · outside snapshot</b></li>
+          <li><span>search_code {"query": "fail_to_pass"}</span><b class="v-no">error · nothing returned</b></li>
+          <li><span>add tests/conftest.py</span><b class="v-no">policy: rejected</b></li>
+          <li><span>edit src/cachekit/lru.py · 1 line</span><b class="v-ok">allowed</b></li>
+        </ol>
+      </div>
+      <dl class="budget">
+        <div><dt class="mono">model turns</dt><dd><span class="count" data-to="20">20</span></dd></div>
+        <div><dt class="mono">tool calls</dt><dd><span class="count" data-to="60">60</span></dd></div>
+        <div><dt class="mono">proposals</dt><dd><span class="count" data-to="3">3</span><small>max 5</small></dd></div>
+        <div><dt class="mono">files / lines per patch</dt><dd><span class="count" data-to="5">5</span><small>/ 300</small></dd></div>
+        <div><dt class="mono">ledger cap per run</dt><dd>$<span class="count" data-to="0.75" data-dec="2">0.75</span></dd></div>
+        <div><dt class="mono">Gemini pacing</dt><dd><span class="count" data-to="4">4</span><small>per 60 s</small></dd></div>
+      </dl>
+    </article>
+
+    <article class="eng-block memory" aria-labelledby="eng-memory">
+      <div class="eng-copy">
+        <p class="eng-k mono">03 · memory</p>
+        <h3 id="eng-memory">Feedback, retries, checkpoints and resume</h3>
+        <p>The repair loop is plain functions over a small JSON state machine. State is saved before every model request and after every step. A resume is refused if the spend ledger shows any request after the checkpoint, so a request whose outcome is unknown is never repeated.</p>
+        <ul class="bul"><li>JSON with a schema version, a SHA-256 over the state, atomic replace and fsync, 16 MB at most</li><li>Limits and counters are restored, so restarting cannot reset a budget</li><li class="lim">Resume is offline only for now, replaying recorded answers</li></ul>
+      </div>
+      <div class="sm-panel">
+        <div class="sm-track" id="sm-track">
+          <span class="sm-state" data-state="propose">propose</span><span class="sm-state" data-state="evaluate">evaluate</span><span class="sm-state" data-state="feedback">feedback</span><span class="sm-state" data-state="done">done</span>
+        </div>
+        <div class="sm-controls">
+          <button type="button" class="switch" id="sm-switch" role="switch" aria-checked="false"><span class="switch-knob" aria-hidden="true"></span><span>Interrupt the run</span></button>
+          <p class="sm-out mono" id="sm-out" aria-live="polite">running · checkpoint written after each step</p>
+        </div>
+        <pre class="sm-json mono" id="sm-json">{ "schema_version": 1, "step": "evaluate", "attempt": 1, … }</pre>
+      </div>
+    </article>
+
+    <article class="eng-block separation" aria-labelledby="eng-sep">
+      <div class="eng-copy">
+        <p class="eng-k mono">04 · separation</p>
+        <h3 id="eng-sep">Hidden-test evaluation and secret redaction</h3>
+        <p>Hidden tests never enter the agent’s files, images or prompts; tests check every message sent. Known secret values are replaced before anything is written to traces, reports, checkpoints or proposals. Raw traces stay local.</p>
+      </div>
+      <div class="sep-vis">
+        <div class="sep-pane"><p class="sep-h mono"><i class="lg lg-host"></i>what the agent sees</p><ul class="mono"><li>issue text</li><li>src/cachekit/lru.py</li><li>tests/test_lru.py</li><li class="dim">hidden tests: none</li></ul></div>
+        <div class="sep-wall" aria-hidden="true"></div>
+        <div class="sep-pane"><p class="sep-h mono"><i class="lg lg-eval"></i>what the evaluator holds</p><ul class="mono"><li>3 fail-to-pass tests</li><li>14 pass-to-pass tests</li><li>reference fix</li><li class="dim">sent back to agent: never</li></ul></div>
+      </div>
+      <div class="redact">
+        <p class="redact-h mono">a trace line, before it is written</p>
+        <p class="redact-line mono">GEMINI_API_KEY=<span class="secret" id="secret-text">PATCHPILOT-CANARY-NOT-A-KEY</span></p>
+        <button type="button" class="btn btn-ghost btn-sm dir-fill" id="redact-btn"><span>Write to trace</span></button>
+      </div>
+    </article>
+
+    <article class="eng-block consent" aria-labelledby="eng-consent">
+      <div class="eng-copy">
+        <p class="eng-k mono">05 · consent</p>
+        <h3 id="eng-consent">Approval binding and failure handling</h3>
+        <p>Only <code>patchpilot approve</code> creates an approval, and only when a person types the start of the patch digest. It is bound to the whole proposal, expires after 24 hours, and covers one draft PR. Try the same check here; nothing is sent.</p>
+      </div>
+      <div class="approve">
+        <div class="approve-h"><p class="mono">patch digest · sha-256 · example value</p><span class="tag tag-sim">demo</span></div>
+        <p class="digest mono" id="ap-digest"></p>
+        <label for="ap-input">Type the first 12 characters of the digest</label>
+        <div class="approve-row"><input id="ap-input" autocomplete="off" spellcheck="false" maxlength="64" placeholder="3f9c…"><button type="button" class="btn btn-ghost dir-fill" id="ap-go"><span>Approve</span></button></div>
+        <p class="approve-out" id="ap-out" aria-live="polite"></p>
+      </div>
+      <div class="statuses">
+        <p class="st-h mono">every run ends in exactly one status</p>
+        <ul class="mono">
+          <li class="s-ok">candidate_verified</li><li class="s-warn">unverified</li><li class="s-bad">rejected_policy</li><li class="s-bad">invalid_proposal</li><li class="s-warn">budget_exceeded</li><li class="s-warn">model_refused</li><li class="s-dim">failed_infrastructure</li>
+        </ul>
+        <p class="st-note">Infrastructure failures are kept apart from patch failures. A GitHub write with an unknown outcome is marked uncertain and never repeated.</p>
+      </div>
+    </article>
   </div>
 </section>
 
 <!-- EVALUATION -->
-<section class="section" id="evaluation" data-reveal>
+<section class="section" id="evaluation" aria-labelledby="eval-title">
   <div class="wrap">
     <header class="section-head">
-      <p class="eyebrow">Evaluation</p>
-      <h2>Baseline against repair, on the same tasks.</h2>
+      <p class="label mono" data-scramble>evaluation · scripted</p>
+      <h2 id="eval-title" class="split">Workflow validation, not model performance.</h2>
     </header>
     <div class="scripted-banner" role="note">
       <span class="tag tag-warn">scripted · offline</span>
-      <p>The “model” is a script of hand-written answers. The real sandbox and the real hidden-test grading ran, but these results are <strong>not the success rate of any language model</strong>. The gap between the modes is built into the scenarios: four of the five give the good answer second.</p>
+      <p>The “model” is a script of hand-written answers. The real sandbox and the real hidden-test grading ran, but these results are <strong>not the success rate of any language model</strong>. The gap between modes is built into the scenarios: four of the five give the good answer second.</p>
     </div>
     <div class="ev-grid">
       <div class="ev-totals" id="ev-totals"></div>
-      <div class="ev-matrix-wrap">
-        <table class="ev-matrix" id="ev-matrix">
-          <caption>Hidden-test outcome per scenario and mode. Each square is one run on one of the four tasks. Hover or focus a square for details.</caption>
-        </table>
-        <p class="ev-legend" aria-hidden="true"><span><i class="sq sq-resolved"></i>resolved</span><span><i class="sq sq-unverified"></i>unverified</span><span><i class="sq sq-rejected_policy"></i>rejected by policy</span><span><i class="sq sq-invalid_proposal"></i>no usable proposal</span></p>
-        <p class="ev-tip" id="ev-tip" aria-live="polite"></p>
+      <div class="ev-right">
+        <div class="ev-chips" role="group" aria-label="Highlight a scenario" id="ev-chips"></div>
+        <p class="ev-desc" id="ev-desc" aria-live="polite"></p>
+        <div class="ev-matrix-wrap">
+          <table class="ev-matrix" id="ev-matrix">
+            <caption>Hidden-test outcome per scenario and mode. Each square is one run on one of the four synthetic tasks. Hover or focus a square for details.</caption>
+          </table>
+          <p class="ev-legend" aria-hidden="true"><span><i class="sq sq-resolved"></i>resolved</span><span><i class="sq sq-unverified"></i>unverified</span><span><i class="sq sq-rejected_policy"></i>rejected by policy</span><span><i class="sq sq-invalid_proposal"></i>no usable proposal</span></p>
+          <p class="ev-tip mono" id="ev-tip" aria-live="polite"></p>
+        </div>
       </div>
     </div>
-    <p class="fine">Source: <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/evals/results/scripted-benchmark.md"><code>evals/results/scripted-benchmark.md</code></a>, regenerated with <code>uv run patchpilot benchmark --scripted</code>. In <code>wrong-then-right</code> on <code>inj-004-pager</code>, the baseline’s wrong fix passes both fail-to-pass tests but breaks 3 of 7 pass-to-pass tests: the hidden regression checks matter.</p>
+    <div class="ev-notes">
+      <div><h3>What “resolved” means</h3><p>After the run ends, <code>grade_candidate</code> rebuilds the tree from the pinned start, adds the hidden tests last, and requires every fail-to-pass test to pass and every pass-to-pass test to keep passing. The agent never sees these tests, and the result is never fed back.</p></div>
+      <div><h3>Limits</h3><ul class="bul"><li class="lim">Four synthetic tasks written for this project; no real open-source bugs yet</li><li class="lim">Answers scripted by the same developer who wrote the tasks; one deterministic run each</li><li class="lim">The live comparison with a real model is pending</li></ul></div>
+    </div>
+    <p class="fine">Source: <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/evals/results/scripted-benchmark.md"><code>evals/results/scripted-benchmark.md</code></a>, regenerated with <code>uv run patchpilot benchmark --scripted</code>.</p>
   </div>
 </section>
 
 <!-- STATUS -->
-<section class="section" id="status" data-reveal>
+<section class="section" id="status" aria-labelledby="status-title">
   <div class="wrap">
     <header class="section-head">
-      <p class="eyebrow">Current status</p>
-      <h2>What is proven, what is simulated, what is pending.</h2>
+      <p class="label mono" data-scramble>current status</p>
+      <h2 id="status-title" class="split">Released as an experimental, offline-validated system.</h2>
     </header>
     <div class="st-grid">
-      <article class="st st-ok">
+      <article class="st st-ok spot">
         <h3><span class="dot dot-ok" aria-hidden="true"></span>Verified locally</h3>
         <ul>
-          <li>1,054 tests pass (3 skipped, 1 expected failure), 94% coverage, Ruff and strict mypy clean</li>
-          <li>Sandbox network, filesystem, privilege and resource limits, attacked in a real Docker container</li>
+          <li>1,058 tests pass (3 skipped, 1 expected failure), 94% coverage, Ruff and strict mypy clean</li>
+          <li>Sandbox limits attacked in a real Docker container</li>
           <li>Allowlist, path confinement, patch policy, hidden-test isolation</li>
           <li>Spend ledger, pacing, attempt caps, no model fallback</li>
           <li>Checkpoint validation and fail-closed resume</li>
-          <li>Baseline and repair on four synthetic tasks, graded by hidden tests</li>
         </ul>
       </article>
-      <article class="st st-sim">
+      <article class="st st-sim spot">
         <h3><span class="dot dot-sim" aria-hidden="true"></span>Simulated</h3>
         <ul>
           <li><b>Model:</b> scripted, hand-written answers in every completed run</li>
-          <li><b>GitHub writes:</b> a local fake GitHub API (<code>tests/fake_github.py</code>) for approval binding, idempotency and reconciliation</li>
+          <li><b>GitHub writes:</b> a local fake GitHub API (<code>tests/fake_github.py</code>); no real external write</li>
           <li><b>Docker host:</b> Colima on macOS, not the Linux reference environment</li>
         </ul>
       </article>
-      <article class="st st-pend">
+      <article class="st st-pend spot">
         <h3><span class="dot dot-warn" aria-hidden="true"></span>Pending</h3>
         <ul>
-          <li><b>Real model:</b> all 8 generation requests to free-tier Gemini got HTTP 503, so no model output and no graded result exist yet</li>
-          <li><b>Real GitHub draft PR:</b> not yet made</li>
-          <li><b>Hosted CI:</b> GitHub Actions runs have not started on this account; no CI gate has passed</li>
-          <li><b>Real open-source tasks:</b> the four tasks are synthetic, written for this project</li>
+          <li><b>Real model:</b> all 8 live Gemini generation requests got HTTP 503; no model output or graded result yet</li>
+          <li><b>Hosted CI:</b> blocked by a GitHub account billing lock; no CI gate has passed</li>
+          <li><b>Real tasks:</b> the four tasks are synthetic</li>
         </ul>
       </article>
     </div>
-    <div class="gates">
-      <h3>Release gates</h3>
-      <ol class="gate-list">
-        <li class="g-ok"><b>A</b><span>Offline engineering</span><em>passed</em></li>
-        <li class="g-block"><b>B</b><span>Real-model validation</span><em>blocked: provider HTTP 503</em></li>
-        <li class="g-wait"><b>C</b><span>Real GitHub draft PR</span><em>not started</em></li>
-        <li class="g-block"><b>D</b><span>Hosted Linux CI</span><em>blocked: account restriction</em></li>
-        <li class="g-wait"><b>E</b><span>Portfolio release</span><em>source public, experimental</em></li>
-      </ol>
-      <p class="fine">Documented, not solved: tests can forge their own results in the same process, the container shares the host kernel, and the approval is an unsigned local file. See the <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/security-review.md">security review</a>.</p>
-    </div>
+    <ol class="gate-list">
+      <li class="g-ok"><b>A</b><span>Offline engineering</span><em>passed</em></li>
+      <li class="g-block"><b>B</b><span>Real-model validation</span><em>blocked · HTTP 503</em></li>
+      <li class="g-wait"><b>C</b><span>Real GitHub draft PR</span><em>not started</em></li>
+      <li class="g-block"><b>D</b><span>Hosted Linux CI</span><em>blocked · billing lock</em></li>
+      <li class="g-wait"><b>E</b><span>Public release</span><em>public · experimental</em></li>
+    </ol>
+    <p class="fine">Documented, not solved: tests can forge their own results in the same process, the container shares the host kernel, and the approval is an unsigned local file. See the <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/security-review.md">security review</a> and <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/ci-status.md">CI status</a>.</p>
   </div>
 </section>
 
 <!-- DOCS -->
-<section class="section" id="docs" data-reveal>
+<section class="section docs" id="docs" aria-labelledby="docs-title">
   <div class="wrap">
     <header class="section-head">
-      <p class="eyebrow">Source and documentation</p>
-      <h2>Read the code behind every claim.</h2>
+      <p class="label mono" data-scramble>source and documentation</p>
+      <h2 id="docs-title" class="split">Read the code behind every claim.</h2>
     </header>
     <div class="docs-grid">
-      <a class="doc doc-main" href="https://github.com/Dj1236/patchpilot-ai">
-        <span class="doc-k">Repository</span>
-        <span class="doc-t">Dj1236/patchpilot-ai</span>
-        <span class="doc-d">Python 3.12 · uv · MIT license</span>
-      </a>
-      <a class="doc" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/architecture.md"><span class="doc-k">Design</span><span class="doc-t">Architecture</span><span class="doc-d">Trust zones, data flow, components</span></a>
-      <a class="doc" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/usage.md"><span class="doc-k">Run it</span><span class="doc-t">Setup and usage</span><span class="doc-d">Offline demo, configuration</span></a>
-      <a class="doc" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/evaluation.md"><span class="doc-k">Evidence</span><span class="doc-t">Evaluation</span><span class="doc-d">Method, scripted results, limits</span></a>
-      <a class="doc" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/security-review.md"><span class="doc-k">Security</span><span class="doc-t">Security review</span><span class="doc-d">Threats, controls, residual risks</span></a>
-      <a class="doc" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/repair-loop.md"><span class="doc-k">Agent</span><span class="doc-t">Repair loop</span><span class="doc-d">Feedback, checkpoints, resume</span></a>
-      <a class="doc" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/github-submission.md"><span class="doc-k">Writes</span><span class="doc-t">GitHub submission</span><span class="doc-d">Approval binding, drafts only</span></a>
-      <a class="doc" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/release-checklist.md"><span class="doc-k">Status</span><span class="doc-t">Release gates</span><span class="doc-d">What passed, what is pending</span></a>
+      <a class="doc doc-main tilt spot" href="https://github.com/Dj1236/patchpilot-ai" data-cursor="open"><span class="doc-k mono">repository</span><span class="doc-t">Dj1236/patchpilot-ai</span><span class="doc-d">Python 3.12 · uv · MIT license</span></a>
+      <a class="doc tilt spot" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/architecture.md" data-cursor="read"><span class="doc-k mono">design</span><span class="doc-t">Architecture</span><span class="doc-d">Trust zones, data flow, components</span></a>
+      <a class="doc tilt spot" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/usage.md" data-cursor="read"><span class="doc-k mono">run it</span><span class="doc-t">Setup and usage</span><span class="doc-d">Offline demo, configuration</span></a>
+      <a class="doc tilt spot" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/evaluation.md" data-cursor="read"><span class="doc-k mono">evidence</span><span class="doc-t">Evaluation</span><span class="doc-d">Method, scripted results, limits</span></a>
+      <a class="doc tilt spot" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/security-review.md" data-cursor="read"><span class="doc-k mono">security</span><span class="doc-t">Security review</span><span class="doc-d">Threats, controls, residual risks</span></a>
+      <a class="doc tilt spot" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/repair-loop.md" data-cursor="read"><span class="doc-k mono">agent</span><span class="doc-t">Repair loop</span><span class="doc-d">Feedback, checkpoints, resume</span></a>
+      <a class="doc tilt spot" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/github-submission.md" data-cursor="read"><span class="doc-k mono">writes</span><span class="doc-t">GitHub submission</span><span class="doc-d">Approval binding, drafts only</span></a>
+      <a class="doc tilt spot" href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/release-checklist.md" data-cursor="read"><span class="doc-k mono">status</span><span class="doc-t">Release gates</span><span class="doc-d">What passed, what is pending</span></a>
     </div>
     <div class="quick">
-      <p class="quick-k">Run the offline demonstration</p>
+      <p class="quick-k mono">run the offline demonstration · no API key needed</p>
 <pre><code>uv sync
 colima start                              <span class="c"># macOS: the sandbox needs a Docker engine</span>
 uv run pytest                             <span class="c"># about 1,050 tests</span>
-uv run patchpilot benchmark --scripted    <span class="c"># no API key needed</span></code></pre>
+uv run patchpilot benchmark --scripted</code></pre>
     </div>
   </div>
 </section>
@@ -297,12 +518,16 @@ uv run patchpilot benchmark --scripted    <span class="c"># no API key needed</s
 
 <footer class="foot">
   <div class="wrap foot-inner">
-    <p>PatchPilot AI · MIT license · Every figure on this page comes from the repository or from offline scripted runs.</p>
+    <p class="foot-mark">PatchPilot <em>AI</em></p>
+    <p>MIT license · Every figure on this page comes from the repository or from offline scripted runs.</p>
     <a href="#top">Back to top ↑</a>
   </div>
 </footer>
 
-<script src="assets/benchmark-data.js"></script>
-<script src="assets/app.js"></script>
+<script src="vendor/gsap.min.js" defer></script>
+<script src="vendor/ScrollTrigger.min.js" defer></script>
+<script src="vendor/SplitText.min.js" defer></script>
+<script src="assets/benchmark-data.js" defer></script>
+<script type="module" src="assets/js/main.js"></script>
 </body>
 </html>
