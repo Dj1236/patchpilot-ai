@@ -72,6 +72,18 @@ configuration reference and troubleshooting.
   tests running on the runner.
 - **Security review:** [security-review.md](docs/security-review.md).
 
+## Live demo (gate F)
+
+`patchpilot.demo` is a small FastAPI service with its own page: visitors run
+one of the four synthetic tasks with the local model and see the tool calls,
+patch, sandbox checks and hidden-test verdict. It is verified locally and
+**not deployed yet**; see [deploy/README.md](deploy/README.md).
+
+```
+uv sync --extra demo
+uv run uvicorn patchpilot.demo.app:create_app --factory --port 8090   # needs Ollama and Docker
+```
+
 ## Documentation
 
 - [Architecture](docs/architecture.md) and [specification](docs/spec.md)

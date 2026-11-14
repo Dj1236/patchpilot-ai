@@ -73,6 +73,17 @@ All of these are compatible with distributing PatchPilot AI under the MIT
 License. `pathspec` (development only) and `certifi` (a bundle of certificate
 authority certificates, used unmodified) are under the weak-copyleft MPL-2.0.
 
+## Demo service (optional `demo` extra)
+
+| Package | License |
+|---|---|
+| fastapi | MIT |
+| starlette | BSD-3-Clause |
+| uvicorn | BSD-3-Clause |
+
+The local model (`qwen3:8b`, Apache-2.0 weights) runs in Ollama and is not
+part of this repository.
+
 ## Landing page (`site/`), vendored and unmodified
 
 Downloaded from the npm registry and copied without changes; the page loads

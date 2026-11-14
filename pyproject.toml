@@ -18,6 +18,12 @@ dependencies = [
 [project.scripts]
 patchpilot = "patchpilot.cli:app"
 
+[project.optional-dependencies]
+demo = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -79,9 +85,11 @@ skip_covered = true
 
 [dependency-groups]
 dev = [
+    "fastapi>=0.115",
     "mypy>=2.4.1",
     "pre-commit>=4.7.0",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.4",
+    "uvicorn>=0.32",
 ]
