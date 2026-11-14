@@ -110,6 +110,23 @@ A repeated commit is simply unused.
 
 ## Limits
 
+- **The remote files are not compared with the run's files.** `submit` checks
+  the base commit id, but not that the files at that commit are the ones the
+  run started from. If they differ, the pull request on GitHub replaces whole
+  files and its real diff differs from the reviewed one. Use only a target
+  whose pinned commit holds exactly the run's files, such as a repository
+  created from a fixture's `repo/` folder.
+- Token permissions needed, per GitHub's documentation for fine-grained
+  tokens, on the one target repository only: **Contents: read and write**
+  (blobs, trees, commits, refs, branches), **Pull requests: read and write**,
+  and **Metadata: read** (always included). Creating refs also lists
+  Workflows permission; it is needed only when a commit changes workflow
+  files, which the patch policy forbids, so it should not be granted.
+- Whether a fine-grained token's responses omit the `X-OAuth-Scopes` header,
+  which the writer uses to refuse classic tokens, is unverified. If they do
+  not, every submission stops at the first read, before any write.
+- If GitHub refuses a draft pull request for the repository's plan, `submit`
+  stops; it never retries without `draft`.
 - No real GitHub write has been made. The fake implements the endpoints as
   documented; GitHub's real answers, rate limits and eventual consistency
   are unverified.
