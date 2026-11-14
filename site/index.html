@@ -222,7 +222,7 @@
           <figure class="scene-fig fig-approve">
             <p class="digest-mini mono"><mark>3f9c2a7be1d4</mark>0c86a5e2f71b…</p>
             <p class="approve-line mono"><span>approved by a person</span><span class="arrowline" aria-hidden="true"></span><span>draft PR</span></p>
-            <p class="fig-note mono">tested against a fake GitHub API only</p>
+            <p class="fig-note mono">validated once on a private synthetic repository</p>
           </figure>
         </li>
       </ol>
@@ -450,10 +450,11 @@
     </header>
     <div class="st-grid">
       <article class="st st-ok spot">
-        <h3><span class="dot dot-ok" aria-hidden="true"></span>Verified locally</h3>
+        <h3><span class="dot dot-ok" aria-hidden="true"></span>Verified</h3>
         <ul>
           <li>1,061 tests pass (3 skipped, 1 expected failure), 94% coverage, Ruff and strict mypy clean</li>
           <li>Hosted Linux CI passed on <code>469074e</code>, Docker sandbox and grading tests included</li>
+          <li>One approved draft PR on a private synthetic repository: branch matched the proposal byte for byte; a second submission created nothing</li>
           <li>Sandbox limits attacked in a real Docker container, locally and on Linux CI</li>
           <li>Allowlist, path confinement, patch policy, hidden-test isolation</li>
           <li>Spend ledger, pacing, attempt caps, no model fallback</li>
@@ -464,7 +465,7 @@
         <h3><span class="dot dot-sim" aria-hidden="true"></span>Simulated</h3>
         <ul>
           <li><b>Model:</b> scripted, hand-written answers in every completed run</li>
-          <li><b>GitHub writes:</b> a local fake GitHub API (<code>tests/fake_github.py</code>); no real external write</li>
+          <li><b>GitHub in tests:</b> a local fake GitHub API (<code>tests/fake_github.py</code>) covers failures and reconciliation</li>
         </ul>
       </article>
       <article class="st st-pend spot">
@@ -478,9 +479,9 @@
     <ol class="gate-list">
       <li class="g-ok"><b>A</b><span>Offline engineering</span><em>passed</em></li>
       <li class="g-block"><b>B</b><span>Real-model validation</span><em>blocked · HTTP 503</em></li>
-      <li class="g-wait"><b>C</b><span>Real GitHub draft PR</span><em>not started</em></li>
+      <li class="g-ok"><b>C</b><span>Real GitHub draft PR</span><em>passed · approved draft PR</em></li>
       <li class="g-ok"><b>D</b><span>Hosted Linux CI</span><em>passed · run 43586146851</em></li>
-      <li class="g-wait"><b>E</b><span>Public release</span><em>public · experimental</em></li>
+      <li class="g-ok"><b>E</b><span>Public release</span><em>passed · experimental</em></li>
     </ol>
     <p class="fine">Documented, not solved: tests can forge their own results in the same process, the container shares the host kernel, and the approval is an unsigned local file. See the <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/security-review.md">security review</a> and <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/ci-status.md">CI status</a>.</p>
   </div>

@@ -77,8 +77,8 @@ model result exists yet.
   repeated.
 - Built an approval-gated GitHub pull request workflow that binds human
   approval to a digest of the exact proposal, reconciles remote state with
-  read-only requests before every write, and is verified against a stateful
-  fake GitHub API.
+  read-only requests before every write, verified against a stateful fake
+  GitHub API and validated with one real, approved draft pull request.
 - Hardened a Docker test sandbox (no network, read-only root, non-root,
   dropped capabilities, resource limits) with tests that attack a real
   container.

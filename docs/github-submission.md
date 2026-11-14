@@ -1,9 +1,13 @@
 # GitHub pull request submission
 
 A verified run can become a **draft** pull request, and only after a person
-approved that exact proposal. Status: **built and verified offline against a
-fake GitHub API. No real GitHub write has been made.** A first real
-submission needs a write token, which needs the owner's authorization.
+approved that exact proposal. Status: **verified against a fake GitHub API
+in tests, and validated once against real GitHub (release gate C).** On
+2026-11-14 the owner approved and submitted run `inj-001-cachekit-1` to the
+private synthetic repository `Dj1236/patchpilot-demo-cachekit`: one draft pull
+request (#2), commit `c664799` on base `3f3c79f`. Its branch matched the
+approved proposal byte for byte, `main` was unchanged, and a second `submit`
+created nothing. Every further submission needs its own approval and token.
 
 ```
 verified run -> propose-pr -> (person reviews) -> approve -> submit -> draft PR
@@ -122,14 +126,14 @@ A repeated commit is simply unused.
   and **Metadata: read** (always included). Creating refs also lists
   Workflows permission; it is needed only when a commit changes workflow
   files, which the patch policy forbids, so it should not be granted.
-- Whether a fine-grained token's responses omit the `X-OAuth-Scopes` header,
-  which the writer uses to refuse classic tokens, is unverified. If they do
-  not, every submission stops at the first read, before any write.
+- A fine-grained token's responses did not carry the `X-OAuth-Scopes`
+  header in the gate C submission, so the writer's classic-token check let
+  it through, as intended.
 - If GitHub refuses a draft pull request for the repository's plan, `submit`
   stops; it never retries without `draft`.
-- No real GitHub write has been made. The fake implements the endpoints as
-  documented; GitHub's real answers, rate limits and eventual consistency
-  are unverified.
+- One real submission has been made (gate C). GitHub's rate limits, its
+  eventual consistency after an `uncertain` write, and drafts on other plans
+  remain unverified.
 - Proposals are built for evaluation fixtures, whose files come from the
   task. A run on a real repository would build the proposal from the intake
   snapshot; that wiring is not done.

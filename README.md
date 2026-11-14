@@ -11,10 +11,11 @@ The model only reads and proposes. Allowlists, path confinement, patch
 rules, budgets, the sandbox, grading and the approval gate are all enforced
 in code outside it.
 
-**Status: the full pipeline is built and verified offline, with scripted
-model answers and a fake GitHub. No real model has completed a run yet**
-(every live request so far was answered with HTTP 503 by the provider), and
-no real GitHub write has been made.
+**Status: experimental release. The pipeline is verified with scripted
+model answers, hosted Linux CI has passed, and one approved draft pull request
+was opened on a private synthetic repository. No real model has completed a
+run yet** (every live request so far was answered with HTTP 503 by the
+provider).
 
 | Milestone | State |
 |---|---|
@@ -24,7 +25,7 @@ no real GitHub write has been made.
 | 4. Intake and repository tools | Built and verified locally |
 | 5. Baseline end to end, plus evaluator | Built; live pilot attempted, no model output ([details](docs/pilot-plan.md)) |
 | 6. Stateful repair loop | Loop, checkpoints and resume verified offline ([details](docs/repair-loop.md)) |
-| 7. Approval-gated draft PR | Verified offline against a fake GitHub ([details](docs/github-submission.md)) |
+| 7. Approval-gated draft PR | Verified against a fake GitHub; one real draft PR validated ([details](docs/github-submission.md)) |
 | 8. Evaluation and release | Scripted benchmark, security review and documentation done; live benchmark pending |
 
 ## How it works

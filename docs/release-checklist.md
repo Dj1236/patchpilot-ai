@@ -7,9 +7,9 @@ a local fake GitHub, and the real sandbox on a local Docker engine.
 |---|---|---|---|---|
 | A. Offline engineering | **Passed** | `main` = `origin/main`, clean; PRs #15 to #17 merged; 1054 passed, 3 skipped, 1 expected failure; 94% coverage; ruff, format, strict mypy, pre-commit pass | None | No |
 | B. Real-model validation | **Blocked** | 8 generation requests on `gemini-3.8-flash` and `gemini-3.6-flash`, all HTTP 503 ([pilot-plan.md](pilot-plan.md)) | One successful `probe`, then one baseline and one repair run on `inj-001-cachekit`, graded | Yes: every live request, and any provider or paid-tier change |
-| C. Real GitHub draft PR | **Not started** | Fake-API tests only ([github-submission.md](github-submission.md)) | Create an owned test repository and a fine-grained token for it; propose, approve and submit one verified run; check idempotency by submitting again | Yes: token creation and the submission |
+| C. Real GitHub draft PR | **Passed** | one draft pull request (#2) on the private synthetic repository `Dj1236/patchpilot-demo-cachekit`, 2026-11-14, run `inj-001-cachekit-1` (scripted, `candidate_verified`), base `3f3c79f`, commit `c664799`. Remote tree matched the fixture; branch bytes, paths and ancestry matched the approved proposal; `main` unchanged; a second `submit` created nothing; token revoked by the owner ([github-submission.md](github-submission.md)) | None | No (each further submission needs its own approval) |
 | D. Hosted Linux CI | **Passed** | Run [`43586146851`](https://github.com/Dj1236/patchpilot-ai/actions/runs/43586146851) attempt 3 on `469074e`: ruff, format, strict mypy; 1,061 passed, 3 skipped, 1 expected failure; Docker sandbox and grading tests ran on Linux ([ci-status.md](ci-status.md)) | None | No |
-| E. Public portfolio release | **Not ready** | Depends on B and C (D passed) | Owner review of docs; credential check; visibility decision | Yes: visibility and publication |
+| E. Public portfolio release | **Passed, experimental** | Repository public; landing page at https://patchpilot-ai-site.vercel.app/; A, C and D passed | A non-experimental release needs gate B | Yes: any further publication |
 
 ## What may proceed without approval
 
@@ -35,11 +35,11 @@ result exists.
 ## Before a public release
 
 - [ ] Gates B and D passed, reported with model, date and run ids
-- [ ] Gate C passed on an owned repository, or explicitly left as "fake-API only" in the README
+- [x] Gate C passed on an owned repository (draft PR #2, private synthetic repository)
 - [ ] Owner review of README, usage, architecture, evaluation, security review and portfolio summary
 - [ ] No credential in git history; keys used in the pilot rotated
 - [ ] Only `report.md` files shared from `runs/`, never traces or checkpoints
-- [ ] Owner decision on repository visibility
+- [x] Owner decision on repository visibility (public)
 
 ## Deferred, not needed for release
 
