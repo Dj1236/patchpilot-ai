@@ -21,11 +21,12 @@ verified with scripted models only (`docs/repair-loop.md`). LangGraph was
 not adopted (decision 15). Milestone 7 (approval-gated draft PRs,
 `docs/github-submission.md`) and the offline part of Milestone 8 (four tasks,
 `patchpilot benchmark --scripted`, security review, release docs) are done.
-Still open: any live model result, a real GitHub write, hosted CI. See
+Still open: any live model result and a real GitHub write. See
 `docs/release-checklist.md`.
 PatchPilot does not load `.env`; the key comes from the process environment.
-Milestone 6 is not started and waits for measured live results. GitHub Actions cannot start on this account, so no CI gate
-has passed; see `docs/ci-status.md` and never describe CI as green. Each
+Milestone 6 is not started and waits for measured live results. Hosted Linux CI passed on `469074e` (run 43586146851,
+sandbox tests included); see `docs/ci-status.md`. Describe CI as green only
+for a run that completed successfully, never for a cancelled one. Each
 later milestone needs the owner's explicit authorization before work starts.
 See the milestone table in `docs/spec.md`.
 

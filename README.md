@@ -19,7 +19,7 @@ no real GitHub write has been made.
 | Milestone | State |
 |---|---|
 | 1. Specification | Done |
-| 2. Foundation | Built; hosted CI gate not passed ([details](docs/ci-status.md)) |
+| 2. Foundation | Done; hosted Linux CI passed ([details](docs/ci-status.md)) |
 | 3. Sandbox and task format | Built and verified locally |
 | 4. Intake and repository tools | Built and verified locally |
 | 5. Baseline end to end, plus evaluator | Built; live pilot attempted, no model output ([details](docs/pilot-plan.md)) |
@@ -64,9 +64,10 @@ configuration reference and troubleshooting.
   are hand-written answers, **not a model's success rate**; the difference
   is built into the scenarios. See [evaluation.md](docs/evaluation.md) and
   `evals/results/`.
-- **Local quality gates:** ruff, strict mypy, about 1,050 tests including
-  container attacks on the sandbox, 94% coverage. Hosted CI cannot start on
-  this account.
+- **Quality gates:** ruff, strict mypy, about 1,060 tests including
+  container attacks on the sandbox, 94% coverage locally. Hosted Linux CI
+  passed on `469074e` ([run 43586146851](https://github.com/Dj1236/patchpilot-ai/actions/runs/43586146851)), with the Docker sandbox
+  tests running on the runner.
 - **Security review:** [security-review.md](docs/security-review.md).
 
 ## Documentation

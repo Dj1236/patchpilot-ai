@@ -8,8 +8,8 @@ a local fake GitHub, and the real sandbox on a local Docker engine.
 | A. Offline engineering | **Passed** | `main` = `origin/main`, clean; PRs #15 to #17 merged; 1054 passed, 3 skipped, 1 expected failure; 94% coverage; ruff, format, strict mypy, pre-commit pass | None | No |
 | B. Real-model validation | **Blocked** | 8 generation requests on `gemini-3.8-flash` and `gemini-3.6-flash`, all HTTP 503 ([pilot-plan.md](pilot-plan.md)) | One successful `probe`, then one baseline and one repair run on `inj-001-cachekit`, graded | Yes: every live request, and any provider or paid-tier change |
 | C. Real GitHub draft PR | **Not started** | Fake-API tests only ([github-submission.md](github-submission.md)) | Create an owned test repository and a fine-grained token for it; propose, approve and submit one verified run; check idempotency by submitting again | Yes: token creation and the submission |
-| D. Hosted Linux CI | **Blocked** | Runs end in `startup_failure`; Actions enabled at repository level ([ci-status.md](ci-status.md)) | Owner resolves the account restriction; one green run with sandbox tests not skipped | Yes: account settings |
-| E. Public portfolio release | **Not ready** | Depends on B, C and D | Owner review of docs; credential check; visibility decision | Yes: visibility and publication |
+| D. Hosted Linux CI | **Passed** | Run [`43586146851`](https://github.com/Dj1236/patchpilot-ai/actions/runs/43586146851) attempt 3 on `469074e`: ruff, format, strict mypy; 1,061 passed, 3 skipped, 1 expected failure; Docker sandbox and grading tests ran on Linux ([ci-status.md](ci-status.md)) | None | No |
+| E. Public portfolio release | **Not ready** | Depends on B and C (D passed) | Owner review of docs; credential check; visibility decision | Yes: visibility and publication |
 
 ## What may proceed without approval
 
@@ -29,8 +29,8 @@ the write allowlist, and idempotent submission against a fake GitHub.
 Documented limitations, not solved: tests can forge their own results in the
 same process; the container shares the host kernel; the approval is an
 unsigned local file; the token's repository scope is not checked by code;
-GitHub's real behavior and list consistency are unverified; the sandbox has
-not run on Linux CI; no live model result exists.
+GitHub's real behavior and list consistency are unverified; no live model
+result exists.
 
 ## Before a public release
 
