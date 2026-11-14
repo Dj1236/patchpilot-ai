@@ -1,48 +1,47 @@
-# Release checklist
+# Release gates
 
-State on 2026-11-14. "Offline" means scripted model answers, a local fake
-GitHub and the real sandbox.
+Audited on 2026-11-14 at `cf724b0`. "Offline" means scripted model answers,
+a local fake GitHub, and the real sandbox on a local Docker engine.
 
-## Complete and validated offline
+| Gate | Status | Evidence | Remaining action | Owner approval needed |
+|---|---|---|---|---|
+| A. Offline engineering | **Passed** | `main` = `origin/main`, clean; PRs #15 to #17 merged; 1054 passed, 3 skipped, 1 expected failure; 94% coverage; ruff, format, strict mypy, pre-commit pass | None | No |
+| B. Real-model validation | **Blocked** | 8 generation requests on `gemini-3.8-flash` and `gemini-3.6-flash`, all HTTP 503 ([pilot-plan.md](pilot-plan.md)) | One successful `probe`, then one baseline and one repair run on `inj-001-cachekit`, graded | Yes: every live request, and any provider or paid-tier change |
+| C. Real GitHub draft PR | **Not started** | Fake-API tests only ([github-submission.md](github-submission.md)) | Create an owned test repository and a fine-grained token for it; propose, approve and submit one verified run; check idempotency by submitting again | Yes: token creation and the submission |
+| D. Hosted Linux CI | **Blocked** | Runs end in `startup_failure`; Actions enabled at repository level ([ci-status.md](ci-status.md)) | Owner resolves the account restriction; one green run with sandbox tests not skipped | Yes: account settings |
+| E. Public portfolio release | **Not ready** | Depends on B, C and D | Owner review of docs; credential check; visibility decision | Yes: visibility and publication |
 
-- [x] Allowlist, pinned snapshot, read-only tools with budgets
-- [x] Sandbox: no network, read-only root, non-root, resource limits (local engine; not on Linux CI)
-- [x] Baseline agent, patch policy, sandbox verification
-- [x] Independent hidden-test grading
-- [x] Repair loop with bounded, controlled feedback
-- [x] Traces, replay, JSON checkpoints, resume that fails closed
-- [x] Spend ledger, pacing, attempt caps, no model fallback
-- [x] Pull request proposal, approval bound to the exact proposal, idempotent submission (fake GitHub)
-- [x] Four fixture tasks and a scripted baseline-versus-repair benchmark with JSON output
-- [x] Security review and adversarial tests
-- [x] Documentation, architecture diagram, offline demonstration
-- [x] Local gates: ruff, format, strict mypy, pre-commit, full test suite, coverage
+## What may proceed without approval
 
-## Implemented, awaiting live validation
+- Re-running gate A locally after any change.
+- Documentation corrections that make the docs match the code.
+- Preparing, but not running, the commands for gates B and C.
 
-- [ ] A real model completing a baseline run (every live request so far: HTTP 503)
-- [ ] A real model completing a repair run
-- [ ] Live benchmark: one model, three runs per task and mode
-- [ ] A first real draft pull request on an owned test repository (needs a write token and the owner's go-ahead)
-- [ ] Building proposals from a real repository's intake snapshot (not wired)
+## Proven controls versus documented limitations
 
-## Blocked
+Proven by tests (locally): allowlist and pinned snapshots, path confinement,
+patch policy, sandbox network and filesystem and privilege and resource
+limits against a real container, hidden-test isolation from the agent,
+spend ledger and pacing and attempt caps, no model fallback, checkpoint
+validation and fail-closed resume, approval binding to the exact proposal,
+the write allowlist, and idempotent submission against a fake GitHub.
 
-- [ ] Hosted CI: runs end in `startup_failure` at account level ([ci-status.md](ci-status.md))
-- [ ] Gemini free tier: HTTP 503 on both approved models ([pilot-plan.md](pilot-plan.md))
+Documented limitations, not solved: tests can forge their own results in the
+same process; the container shares the host kernel; the approval is an
+unsigned local file; the token's repository scope is not checked by code;
+GitHub's real behavior and list consistency are unverified; the sandbox has
+not run on Linux CI; no live model result exists.
 
-## Before a public portfolio release
+## Before a public release
 
-- [ ] At least one live, graded run per mode, reported with its model and date
-- [ ] Hosted CI green on Linux, sandbox tests included
-- [ ] Owner review of all documentation for accuracy
-- [ ] Owner decision to make the repository public (private until Milestone 8 is complete)
-- [ ] Remove or rotate any credential ever used; confirm none is in git history
-- [ ] Decide whether `runs/` artifacts from the pilot may be shared (`report.md` only, never `trace.jsonl`)
+- [ ] Gates B and D passed, reported with model, date and run ids
+- [ ] Gate C passed on an owned repository, or explicitly left as "fake-API only" in the README
+- [ ] Owner review of README, usage, architecture, evaluation, security review and portfolio summary
+- [ ] No credential in git history; keys used in the pilot rotated
+- [ ] Only `report.md` files shared from `runs/`, never traces or checkpoints
+- [ ] Owner decision on repository visibility
 
-## Deferred
+## Deferred, not needed for release
 
-- Stronger isolation (gVisor or a microVM)
-- Real open-source bugs in the task set; SWE-bench Lite
-- A separate process to collect test results, against in-process forgery
-- Resuming live runs
+Stronger isolation, real open-source tasks, cross-process collection of test
+results, resuming live runs, building proposals from a real intake snapshot.
