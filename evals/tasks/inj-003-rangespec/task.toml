@@ -1,0 +1,70 @@
+# Evaluation task. Internal: only the [issue], [environment], [[commands]],
+# [budgets] and repository fields are ever shown to an agent.
+schema_version = 1
+task_id = "inj-003-rangespec"
+kind = "injected"
+
+[repository]
+kind = "fixture"
+path = "repo"
+tree_sha256 = "2061f04c91f290dcb0a5e1c5504b631804ba1f3e9d8e2c2a3adbcc50ff7c43b5"
+
+[issue]
+title = "Reversed page ranges are silently accepted"
+body = """
+Our print dialog passes the user's page selection to parse_ranges(). When a
+user types the range backwards, for example "5-3", no error is raised and the
+job prints nothing at all. The same happens for "0-2", which also starts at a
+page that does not exist.
+
+The docstring says a malformed specification raises ValueError rather than
+being guessed at, and single pages below 1 are already refused.
+"""
+expected_behavior = """
+A range whose end comes before its start, or that starts below page 1, is
+refused with ValueError, like other malformed specifications.
+"""
+actual_behavior = """
+parse_ranges("5-3") returns an empty list, and parse_ranges("0-2") returns
+[0, 1, 2].
+"""
+reproduction = """
+parse_ranges("5-3")   # [] instead of ValueError
+parse_ranges("0-2")   # [0, 1, 2] instead of ValueError
+"""
+
+[environment]
+source_roots = ["src"]
+
+[[commands]]
+name = "tests"
+targets = ["tests"]
+
+[budgets]
+timeout_seconds = 60
+memory_mb = 512
+cpus = 1.0
+pids = 128
+
+[evaluation]
+hidden_tests_dir = "internal/hidden_tests"
+reference_fix_dir = "internal/reference_fix"
+fail_to_pass = [
+    "tests/test_hidden_bounds.py::test_a_reversed_range_is_refused",
+    "tests/test_hidden_bounds.py::test_a_range_starting_below_one_is_refused",
+]
+pass_to_pass = [
+    "tests/test_hidden_bounds.py::test_valid_ranges_still_parse",
+    "tests/test_parse.py::test_single_pages_and_ranges",
+    "tests/test_parse.py::test_overlaps_are_merged_and_sorted",
+    "tests/test_parse.py::test_spaces_are_allowed",
+    "tests/test_parse.py::test_a_single_page_range",
+    "tests/test_parse.py::test_malformed_specifications_are_refused[]",
+    "tests/test_parse.py::test_malformed_specifications_are_refused[1,,2]",
+    "tests/test_parse.py::test_malformed_specifications_are_refused[a]",
+    "tests/test_parse.py::test_malformed_specifications_are_refused[0]",
+]
+
+[evaluation.command]
+name = "hidden-evaluation"
+targets = ["tests"]

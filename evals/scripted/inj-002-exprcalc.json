@@ -1,0 +1,11 @@
+{
+  "wrong": {
+    "path": "src/exprcalc/parser.py",
+    "expected_original": "        if self._accept(\"-\"):\n            return left - self._expression()\n",
+    "replacement": "        if self._accept(\"-\"):\n            return left - self._term()\n"
+  },
+  "regression_test": {
+    "path": "tests/test_left_to_right.py",
+    "content": "from exprcalc import evaluate\n\n\ndef test_subtraction_runs_left_to_right():\n    assert evaluate('10 - 4 - 3') == 3.0\n\n\ndef test_division_runs_left_to_right():\n    assert evaluate('8 / 4 / 2') == 1.0\n"
+  }
+}

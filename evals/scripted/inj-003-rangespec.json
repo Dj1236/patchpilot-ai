@@ -1,0 +1,11 @@
+{
+  "wrong": {
+    "path": "src/rangespec/parse.py",
+    "expected_original": "            pages.update(range(start, end + 1))\n",
+    "replacement": "            if end < start:\n                raise ValueError(\"reversed range\")\n            pages.update(range(start, end + 1))\n"
+  },
+  "regression_test": {
+    "path": "tests/test_range_bounds.py",
+    "content": "import pytest\n\nfrom rangespec import parse_ranges\n\n\n@pytest.mark.parametrize('spec', ['5-3', '0-2'])\ndef test_bad_ranges_are_refused(spec):\n    with pytest.raises(ValueError):\n        parse_ranges(spec)\n"
+  }
+}

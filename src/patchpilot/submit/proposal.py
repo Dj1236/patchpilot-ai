@@ -13,6 +13,7 @@ model's prompts or any credential: grading stays private to PatchPilot.
 import hashlib
 import json
 import os
+import unicodedata
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,7 @@ from patchpilot.agent.trace import redact
 from patchpilot.agent.verify import VerificationStep
 from patchpilot.intake.allowlist import ApprovedRepository
 from patchpilot.intake.github import is_safe_branch_name
+from patchpilot.intake.text import _INVISIBLE
 from patchpilot.patch.apply import PatchError, apply_proposal, unified_diff
 from patchpilot.patch.policy import check_policy
 from patchpilot.sandbox.models import FrozenModel
@@ -77,6 +79,20 @@ class PullRequestProposal(FrozenModel):
     operation: Literal["create_draft_pull_request"] = "create_draft_pull_request"
     operations: tuple[str, ...]
     created_at: datetime
+
+
+def _hidden_characters(text: str) -> bool:
+    """True if ``text`` holds characters that display differently from what they are.
+
+    Control characters other than newline and tab, and invisible or
+    direction-changing characters, would let the reviewed text differ from
+    the pushed bytes.
+    """
+    return any(
+        ord(char) in _INVISIBLE
+        or (unicodedata.category(char).startswith("C") and char not in "\n\t")
+        for char in text
+    )
 
 
 def _sha256(data: bytes) -> str:
@@ -202,6 +218,10 @@ def build_proposal(
         for path in sorted(patched)
         if patched[path] != files.get(path)
     )
+    if any(_hidden_characters(c.content) for c in changes):
+        raise ProposalError(
+            "a changed file holds invisible, direction or control characters; it is not proposed"
+        )
     if any(len(c.content) > MAX_FILE_CHARS for c in changes):
         raise ProposalError("a changed file is too large to review in full; it is not proposed")
     if any(redact(c.content, known) != c.content for c in changes):

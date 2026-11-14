@@ -27,7 +27,7 @@ from patchpilot.tasks import (
 from patchpilot.tasks.schema import Evaluation
 
 TASKS_ROOT = Path(__file__).resolve().parents[2] / "evals" / "tasks"
-TASK_IDS = ["inj-001-cachekit", "inj-002-exprcalc"]
+TASK_IDS = ["inj-001-cachekit", "inj-002-exprcalc", "inj-003-rangespec", "inj-004-pager"]
 
 
 def _definition() -> dict[str, Any]:

@@ -1,0 +1,11 @@
+{
+  "wrong": {
+    "path": "src/pager/pages.py",
+    "expected_original": "    return total // size\n",
+    "replacement": "    return total // size + 1 if total else 0\n"
+  },
+  "regression_test": {
+    "path": "tests/test_partial_page.py",
+    "content": "from pager import page_count\n\n\ndef test_a_partial_last_page_counts():\n    assert page_count(7, 3) == 3\n\n\ndef test_exact_multiples_do_not_gain_a_page():\n    assert page_count(9, 3) == 3\n"
+  }
+}

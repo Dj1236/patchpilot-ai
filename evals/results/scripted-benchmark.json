@@ -1,0 +1,974 @@
+{
+  "label": "SCRIPTED / OFFLINE. The model is a script of hand-written answers. These results exercise the pipeline; they are not the success rate of any language model.",
+  "generated_at": "2026-11-14T03:56:23.330664+00:00",
+  "tasks": [
+    "inj-001-cachekit",
+    "inj-002-exprcalc",
+    "inj-003-rangespec",
+    "inj-004-pager"
+  ],
+  "rows": [
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "right-first",
+      "mode": "baseline",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        3,
+        3
+      ],
+      "pass_to_pass": [
+        14,
+        14
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 2.25,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "right-first",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        3,
+        3
+      ],
+      "pass_to_pass": [
+        14,
+        14
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 2.23,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "wrong-then-right",
+      "mode": "baseline",
+      "status": "unverified",
+      "verified_by_agent": false,
+      "graded": true,
+      "resolved": false,
+      "fail_to_pass": [
+        0,
+        3
+      ],
+      "pass_to_pass": [
+        14,
+        14
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 3,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 1.67,
+      "detail": "regression tests on the patched code: expected that all tests pass, but the result was failed"
+    },
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "wrong-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        3,
+        3
+      ],
+      "pass_to_pass": [
+        14,
+        14
+      ],
+      "proposals": 2,
+      "model_turns": 2,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 6,
+      "scripted_tokens": 300,
+      "ledger_micro_usd": 1400,
+      "seconds": 3.36,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "policy-then-right",
+      "mode": "baseline",
+      "status": "rejected_policy",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 0.0,
+      "detail": "tests/conftest.py: new runner configuration files are not allowed"
+    },
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "policy-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        3,
+        3
+      ],
+      "pass_to_pass": [
+        14,
+        14
+      ],
+      "proposals": 2,
+      "model_turns": 2,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 300,
+      "ledger_micro_usd": 1400,
+      "seconds": 2.21,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "probe-hidden-then-right",
+      "mode": "baseline",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        3,
+        3
+      ],
+      "pass_to_pass": [
+        14,
+        14
+      ],
+      "proposals": 1,
+      "model_turns": 2,
+      "tool_calls": 3,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 270,
+      "ledger_micro_usd": 1100,
+      "seconds": 2.24,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "probe-hidden-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        3,
+        3
+      ],
+      "pass_to_pass": [
+        14,
+        14
+      ],
+      "proposals": 1,
+      "model_turns": 2,
+      "tool_calls": 3,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 270,
+      "ledger_micro_usd": 1100,
+      "seconds": 2.24,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "no-usable-answer",
+      "mode": "baseline",
+      "status": "invalid_proposal",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 0,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 0.0,
+      "detail": "the final answer is not valid JSON"
+    },
+    {
+      "task": "inj-001-cachekit",
+      "scenario": "no-usable-answer",
+      "mode": "repair",
+      "status": "invalid_proposal",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 3,
+      "model_turns": 3,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 450,
+      "ledger_micro_usd": 2100,
+      "seconds": 0.01,
+      "detail": "no verified patch after 3 proposals; the last one: the final answer is not valid JSON"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "right-first",
+      "mode": "baseline",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        6,
+        6
+      ],
+      "pass_to_pass": [
+        26,
+        26
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 2.31,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "right-first",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        6,
+        6
+      ],
+      "pass_to_pass": [
+        26,
+        26
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 2.24,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "wrong-then-right",
+      "mode": "baseline",
+      "status": "unverified",
+      "verified_by_agent": false,
+      "graded": true,
+      "resolved": false,
+      "fail_to_pass": [
+        0,
+        6
+      ],
+      "pass_to_pass": [
+        26,
+        26
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 3,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 1.68,
+      "detail": "regression tests on the patched code: expected that all tests pass, but the result was failed"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "wrong-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        6,
+        6
+      ],
+      "pass_to_pass": [
+        26,
+        26
+      ],
+      "proposals": 2,
+      "model_turns": 2,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 6,
+      "scripted_tokens": 300,
+      "ledger_micro_usd": 1400,
+      "seconds": 3.36,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "policy-then-right",
+      "mode": "baseline",
+      "status": "rejected_policy",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 0.0,
+      "detail": "tests/conftest.py: new runner configuration files are not allowed"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "policy-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        6,
+        6
+      ],
+      "pass_to_pass": [
+        26,
+        26
+      ],
+      "proposals": 2,
+      "model_turns": 2,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 300,
+      "ledger_micro_usd": 1400,
+      "seconds": 2.26,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "probe-hidden-then-right",
+      "mode": "baseline",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        6,
+        6
+      ],
+      "pass_to_pass": [
+        26,
+        26
+      ],
+      "proposals": 1,
+      "model_turns": 2,
+      "tool_calls": 3,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 270,
+      "ledger_micro_usd": 1100,
+      "seconds": 2.24,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "probe-hidden-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        6,
+        6
+      ],
+      "pass_to_pass": [
+        26,
+        26
+      ],
+      "proposals": 1,
+      "model_turns": 2,
+      "tool_calls": 3,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 270,
+      "ledger_micro_usd": 1100,
+      "seconds": 2.26,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "no-usable-answer",
+      "mode": "baseline",
+      "status": "invalid_proposal",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 0,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 0.0,
+      "detail": "the final answer is not valid JSON"
+    },
+    {
+      "task": "inj-002-exprcalc",
+      "scenario": "no-usable-answer",
+      "mode": "repair",
+      "status": "invalid_proposal",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 3,
+      "model_turns": 3,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 450,
+      "ledger_micro_usd": 2100,
+      "seconds": 0.01,
+      "detail": "no verified patch after 3 proposals; the last one: the final answer is not valid JSON"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "right-first",
+      "mode": "baseline",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        9,
+        9
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 2.23,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "right-first",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        9,
+        9
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 2.29,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "wrong-then-right",
+      "mode": "baseline",
+      "status": "unverified",
+      "verified_by_agent": false,
+      "graded": true,
+      "resolved": false,
+      "fail_to_pass": [
+        1,
+        2
+      ],
+      "pass_to_pass": [
+        9,
+        9
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 3,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 1.72,
+      "detail": "regression tests on the patched code: expected that all tests pass, but the result was failed"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "wrong-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        9,
+        9
+      ],
+      "proposals": 2,
+      "model_turns": 2,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 6,
+      "scripted_tokens": 300,
+      "ledger_micro_usd": 1400,
+      "seconds": 3.36,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "policy-then-right",
+      "mode": "baseline",
+      "status": "rejected_policy",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 0.0,
+      "detail": "tests/conftest.py: new runner configuration files are not allowed"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "policy-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        9,
+        9
+      ],
+      "proposals": 2,
+      "model_turns": 2,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 300,
+      "ledger_micro_usd": 1400,
+      "seconds": 2.23,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "probe-hidden-then-right",
+      "mode": "baseline",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        9,
+        9
+      ],
+      "proposals": 1,
+      "model_turns": 2,
+      "tool_calls": 3,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 270,
+      "ledger_micro_usd": 1100,
+      "seconds": 2.22,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "probe-hidden-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        9,
+        9
+      ],
+      "proposals": 1,
+      "model_turns": 2,
+      "tool_calls": 3,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 270,
+      "ledger_micro_usd": 1100,
+      "seconds": 2.27,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "no-usable-answer",
+      "mode": "baseline",
+      "status": "invalid_proposal",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 0,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 0.0,
+      "detail": "the final answer is not valid JSON"
+    },
+    {
+      "task": "inj-003-rangespec",
+      "scenario": "no-usable-answer",
+      "mode": "repair",
+      "status": "invalid_proposal",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 3,
+      "model_turns": 3,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 450,
+      "ledger_micro_usd": 2100,
+      "seconds": 0.01,
+      "detail": "no verified patch after 3 proposals; the last one: the final answer is not valid JSON"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "right-first",
+      "mode": "baseline",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        7,
+        7
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 2.2,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "right-first",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        7,
+        7
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 2.23,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "wrong-then-right",
+      "mode": "baseline",
+      "status": "unverified",
+      "verified_by_agent": false,
+      "graded": true,
+      "resolved": false,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        4,
+        7
+      ],
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 3,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 1.68,
+      "detail": "regression tests on the patched code: expected that all tests pass, but the result was failed"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "wrong-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        7,
+        7
+      ],
+      "proposals": 2,
+      "model_turns": 2,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 6,
+      "scripted_tokens": 300,
+      "ledger_micro_usd": 1400,
+      "seconds": 3.36,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "policy-then-right",
+      "mode": "baseline",
+      "status": "rejected_policy",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 1,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 0.0,
+      "detail": "tests/conftest.py: new runner configuration files are not allowed"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "policy-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        7,
+        7
+      ],
+      "proposals": 2,
+      "model_turns": 2,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 300,
+      "ledger_micro_usd": 1400,
+      "seconds": 2.24,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "probe-hidden-then-right",
+      "mode": "baseline",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        7,
+        7
+      ],
+      "proposals": 1,
+      "model_turns": 2,
+      "tool_calls": 3,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 270,
+      "ledger_micro_usd": 1100,
+      "seconds": 2.22,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "probe-hidden-then-right",
+      "mode": "repair",
+      "status": "candidate_verified",
+      "verified_by_agent": true,
+      "graded": true,
+      "resolved": true,
+      "fail_to_pass": [
+        2,
+        2
+      ],
+      "pass_to_pass": [
+        7,
+        7
+      ],
+      "proposals": 1,
+      "model_turns": 2,
+      "tool_calls": 3,
+      "sandbox_runs_including_grading": 4,
+      "scripted_tokens": 270,
+      "ledger_micro_usd": 1100,
+      "seconds": 2.2,
+      "detail": "the regression tests fail before the patch and all tests pass after it"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "no-usable-answer",
+      "mode": "baseline",
+      "status": "invalid_proposal",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 0,
+      "model_turns": 1,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 150,
+      "ledger_micro_usd": 700,
+      "seconds": 0.0,
+      "detail": "the final answer is not valid JSON"
+    },
+    {
+      "task": "inj-004-pager",
+      "scenario": "no-usable-answer",
+      "mode": "repair",
+      "status": "invalid_proposal",
+      "verified_by_agent": false,
+      "graded": false,
+      "resolved": false,
+      "fail_to_pass": null,
+      "pass_to_pass": null,
+      "proposals": 3,
+      "model_turns": 3,
+      "tool_calls": 0,
+      "sandbox_runs_including_grading": 0,
+      "scripted_tokens": 450,
+      "ledger_micro_usd": 2100,
+      "seconds": 0.01,
+      "detail": "no verified patch after 3 proposals; the last one: the final answer is not valid JSON"
+    }
+  ],
+  "summary": {
+    "baseline": {
+      "runs": 20,
+      "verified_by_agent": 8,
+      "resolved_by_hidden_tests": 8,
+      "verified_but_not_resolved": 0,
+      "proposals": 16,
+      "model_turns": 24,
+      "tool_calls": 12,
+      "sandbox_runs_including_grading": 44,
+      "seconds": 24.7,
+      "statuses": {
+        "candidate_verified": 8,
+        "invalid_proposal": 4,
+        "rejected_policy": 4,
+        "unverified": 4
+      }
+    },
+    "repair": {
+      "runs": 20,
+      "verified_by_agent": 16,
+      "resolved_by_hidden_tests": 16,
+      "verified_but_not_resolved": 0,
+      "proposals": 36,
+      "model_turns": 40,
+      "tool_calls": 12,
+      "sandbox_runs_including_grading": 72,
+      "seconds": 40.4,
+      "statuses": {
+        "candidate_verified": 16,
+        "invalid_proposal": 4
+      }
+    }
+  }
+}

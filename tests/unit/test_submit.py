@@ -203,6 +203,15 @@ def test_a_proposal_is_never_cut_for_review(tmp_path: Path) -> None:
                 make(record)
 
 
+@pytest.mark.parametrize("hidden", ["\u202e", "\u200b", "\x1b[2K", "\r", "\U000e0041"])
+def test_a_change_that_would_display_differently_is_refused(tmp_path: Path, hidden: str) -> None:
+    edit = {"path": "src/pkg/core.py", "expected_original": "    return None\n"}
+    edit["replacement"] = f"    return sum(items)  # ok{hidden}\n"
+
+    with pytest.raises(ProposalError, match="invisible, direction or control"):
+        make(verified(tmp_path, edits=[edit]))
+
+
 def test_a_stored_proposal_that_was_edited_is_refused(tmp_path: Path) -> None:
     setup = Setup(tmp_path)
     path = setup.directory / "pr-proposal.json"
