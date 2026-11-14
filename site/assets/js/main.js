@@ -23,32 +23,45 @@ initPointer(ctx.gsap);
 let hero = null;
 initEntrances(ctx.gsap, { onHeroScroll: (p) => hero?.setScroll(p) });
 
-/* ---------- the 3D hero: only where it can run well ---------- */
-function canRunWebGL() {
-  if (still()) return false;
-  const conn = navigator.connection;
-  if (conn?.saveData) return false;
-  if ((navigator.deviceMemory ?? 8) < 4 || (navigator.hardwareConcurrency ?? 8) < 4) return false;
+/* ---------- the 3D hero ---------- */
+// Only hard blockers turn the 3D scene off. Core count and device memory are not used for
+// that: browsers such as Brave randomize them per site against fingerprinting, so they only
+// pick the lighter scene.
+function heroBlocker() {
+  if (still()) return 'reduced motion';
+  if (navigator.connection?.saveData) return 'data saver';
   try {
     const probe = document.createElement('canvas');
-    return Boolean(probe.getContext('webgl2') || probe.getContext('webgl'));
-  } catch { return false; }
+    if (!(probe.getContext('webgl2') || probe.getContext('webgl'))) return 'WebGL unavailable';
+  } catch { return 'WebGL unavailable'; }
+  return null;
+}
+const lowPower = () => (navigator.hardwareConcurrency ?? 8) < 4 || (navigator.deviceMemory ?? 8) < 4;
+
+function staticCore(reason) {
+  const step = $('[data-boot="core"]');
+  step.classList.remove('is-busy', 'is-done');
+  boot('core', 'skip');
+  step.textContent = 'repair core · static';
+  console.info(`PatchPilot: showing the static repair core (${reason}).`);
 }
 
 async function loadHero() {
-  if (!canRunWebGL()) { boot('core', 'skip'); $('[data-boot="core"]').textContent = 'repair core · static'; return; }
+  const reason = heroBlocker();
+  if (reason) { staticCore(reason); return; }
+  const step = $('[data-boot="core"]');
+  step.classList.add('is-busy');
   try {
     const { startHero } = await import('./hero-scene.js');
-    const lite = window.matchMedia('(max-width: 820px)').matches;
+    const lite = window.matchMedia('(max-width: 820px)').matches || lowPower();
     hero = startHero({
       canvas: $('#core-canvas'), labels: $('#core-labels'), status: $('#core-status'), lite,
-      onFirstFrame: () => { document.documentElement.classList.add('webgl-on'); boot('core'); },
-      onLost: () => { document.documentElement.classList.remove('webgl-on'); hero?.dispose(); hero = null; },
+      onFirstFrame: () => { document.documentElement.classList.add('webgl-on'); step.classList.remove('is-busy'); boot('core'); },
+      onLost: () => { document.documentElement.classList.remove('webgl-on'); hero?.dispose(); hero = null; staticCore('WebGL context lost'); },
     });
   } catch (error) {
     // the static illustration stays in place
-    boot('core', 'skip');
-    console.warn('Repair core not started:', error);
+    staticCore(`could not start: ${error?.message || error}`);
   }
 }
 // after first paint and idle time, so the headline never waits for WebGL

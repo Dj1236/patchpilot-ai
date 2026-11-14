@@ -91,3 +91,12 @@ def test_vendored_files_carry_their_licenses() -> None:
     fonts = SITE / "assets" / "fonts"
     for name in ("space-grotesk.OFL.txt", "jetbrains-mono.OFL.txt"):
         assert "SIL Open Font License" in (fonts / name).read_text(), name
+
+
+def test_hero_is_not_disabled_by_randomized_device_signals() -> None:
+    # Brave and others randomize these per site; they may only select the lighter scene.
+    main = (SITE / "assets" / "js" / "main.js").read_text()
+    blocker = main[main.index("function heroBlocker") : main.index("const lowPower")]
+    for signal in ("hardwareConcurrency", "deviceMemory"):
+        assert signal not in blocker
+        assert signal in main[main.index("const lowPower") :]

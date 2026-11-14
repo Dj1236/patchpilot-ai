@@ -80,8 +80,8 @@ export function startHero({ canvas, labels, status, lite = false, onFirstFrame, 
   mods.forEach((m, i) => modules.setColorAt(i, m.color));
 
   // sandbox (amber cube) and evaluator (violet octahedron): separate trust zones, never merged
-  const sandboxPos = new THREE.Vector3(2.1, -1.5, 0.6);
-  const evalPos = new THREE.Vector3(-1.7, -2.0, 0.2);
+  const sandboxPos = new THREE.Vector3(2.3, -1.05, 0.6);
+  const evalPos = new THREE.Vector3(-2.05, -0.75, 0.2);
   const sandboxMat = keep(new THREE.LineBasicMaterial({ color: C.sandbox, transparent: true, opacity: 0.85 }));
   const sandbox = new THREE.LineSegments(keep(new THREE.EdgesGeometry(keep(new THREE.BoxGeometry(0.72, 0.72, 0.72)))), sandboxMat);
   sandbox.position.copy(sandboxPos);
