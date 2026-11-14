@@ -2,10 +2,26 @@
 
 ## Current state
 
-**The Milestone 2 CI gate has not passed.** No GitHub Actions run has ever
-completed for this repository.
+**Hosted Linux CI has passed** on `main` commit `469074e`:
+GitHub Actions run [`43586146851`](https://github.com/Dj1236/patchpilot-ai/actions/runs/43586146851), attempt 3, on 2026-11-14.
+Ruff, formatting and strict mypy passed, and `pytest` reported 1,061 passed,
+3 skipped and 1 expected failure. The run log shows the Docker sandbox and
+grading tests executing on the Linux runner (`test_sandbox_security.py`,
+`test_sandbox_limits.py`, `test_sandbox_controls.py`,
+`test_grading_integrity.py`, `test_repair_tasks.py`). The three skips are
+the live GitHub intake tests, which run only with `PATCHPILOT_LIVE_GITHUB=1`;
+the expected failure is the known same-process forgery limitation
+([grading-integrity.md](grading-integrity.md)).
 
-Every run ends with `startup_failure` within a second of being created, with
+Attempts 1 and 2 of that run were cancelled, not failed: the workflow's
+`concurrency` group (`ci-refs/heads/main`, `cancel-in-progress: true`)
+cancels a running `main` run when another `main` run is queued, and older
+`main` runs were rerun at the same time. Rerun only the latest `main` run.
+
+## History: the account billing lock (2026-11-12 to 2026-11-14)
+
+Until the run above, no GitHub Actions run had completed for this
+repository. Every run ended with `startup_failure` within a second of being created, with
 zero jobs. An independent workflow containing a single `echo` step, pushed on
 a throwaway branch on 2026-11-12, failed the same way. The workflow file
 itself is registered by GitHub as valid and active. The cause is a
@@ -27,8 +43,9 @@ lock at https://github.com/settings/billing; nothing in the repository can.
 
 ## Exception
 
-The project owner authorized Milestone 3 to proceed while this external
-blocker remains, on these terms:
+The exception below applied while the account restriction blocked CI. It
+is closed now that hosted Linux CI has passed. The project owner authorized
+Milestone 3 to proceed while this external blocker remained, on these terms:
 
 - The Milestone 2 CI gate stays recorded as **not passed**.
 - Verification is done locally and reported as local verification only.
@@ -50,23 +67,20 @@ through Colima. Since Milestone 4 it includes fetch tests that run real git
 against local repositories. Since Milestone 5 it includes the baseline
 pipeline with a scripted model; no test makes a paid call.
 
-The same exception applies to Milestones 3, 4 and 5: all are verified
-locally only, and none has passed on hosted Linux CI.
+The same exception applied to Milestones 3 to 8 until run `43586146851`
+passed on hosted Linux CI.
 
-## What local verification does not cover
+## What hosted CI now covers
 
-- **Linux is the reference environment for the sandbox**, and it has not
-  been exercised by CI. Locally, containers run inside a Linux virtual
-  machine (Colima on macOS), so sandbox tests do run against a real Linux
-  kernel, but not the one GitHub's runners use.
-- A clean-machine install from the lock file has not been verified by an
+- **Linux, the reference environment for the sandbox:** the sandbox tests
+  ran against the GitHub runner's Docker engine, not only Colima on macOS.
+- **A clean install from the lock file** (`uv sync --locked`) on an
   independent runner.
 
-## To close the exception
+## Closing the exception (done)
 
-1. Resolve the account restriction.
-2. Push a commit and confirm the `CI` workflow completes successfully.
-3. Confirm in the run log that the sandbox tests ran on the Linux runner
-   and were not skipped. The workflow's `pytest` step includes them whenever
-   a Docker engine is reachable.
-4. Update this file and the milestone table in the README.
+1. The account restriction was resolved by the owner.
+2. The `CI` workflow completed successfully on `main` (`469074e`).
+3. The run log shows the sandbox tests running on the Linux runner, not
+   skipped.
+4. This file, the release checklist and the README were updated.

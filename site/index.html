@@ -452,8 +452,9 @@
       <article class="st st-ok spot">
         <h3><span class="dot dot-ok" aria-hidden="true"></span>Verified locally</h3>
         <ul>
-          <li>1,058 tests pass (3 skipped, 1 expected failure), 94% coverage, Ruff and strict mypy clean</li>
-          <li>Sandbox limits attacked in a real Docker container</li>
+          <li>1,061 tests pass (3 skipped, 1 expected failure), 94% coverage, Ruff and strict mypy clean</li>
+          <li>Hosted Linux CI passed on <code>469074e</code>, Docker sandbox and grading tests included</li>
+          <li>Sandbox limits attacked in a real Docker container, locally and on Linux CI</li>
           <li>Allowlist, path confinement, patch policy, hidden-test isolation</li>
           <li>Spend ledger, pacing, attempt caps, no model fallback</li>
           <li>Checkpoint validation and fail-closed resume</li>
@@ -464,14 +465,12 @@
         <ul>
           <li><b>Model:</b> scripted, hand-written answers in every completed run</li>
           <li><b>GitHub writes:</b> a local fake GitHub API (<code>tests/fake_github.py</code>); no real external write</li>
-          <li><b>Docker host:</b> Colima on macOS, not the Linux reference environment</li>
         </ul>
       </article>
       <article class="st st-pend spot">
         <h3><span class="dot dot-warn" aria-hidden="true"></span>Pending</h3>
         <ul>
           <li><b>Real model:</b> all 8 live Gemini generation requests got HTTP 503; no model output or graded result yet</li>
-          <li><b>Hosted CI:</b> blocked by a GitHub account billing lock; no CI gate has passed</li>
           <li><b>Real tasks:</b> the four tasks are synthetic</li>
         </ul>
       </article>
@@ -480,7 +479,7 @@
       <li class="g-ok"><b>A</b><span>Offline engineering</span><em>passed</em></li>
       <li class="g-block"><b>B</b><span>Real-model validation</span><em>blocked · HTTP 503</em></li>
       <li class="g-wait"><b>C</b><span>Real GitHub draft PR</span><em>not started</em></li>
-      <li class="g-block"><b>D</b><span>Hosted Linux CI</span><em>blocked · billing lock</em></li>
+      <li class="g-ok"><b>D</b><span>Hosted Linux CI</span><em>passed · run 43586146851</em></li>
       <li class="g-wait"><b>E</b><span>Public release</span><em>public · experimental</em></li>
     </ol>
     <p class="fine">Documented, not solved: tests can forge their own results in the same process, the container shares the host kernel, and the approval is an unsigned local file. See the <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/security-review.md">security review</a> and <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/ci-status.md">CI status</a>.</p>
