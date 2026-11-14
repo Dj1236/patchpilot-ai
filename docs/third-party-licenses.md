@@ -1,8 +1,9 @@
 # Third-party licenses
 
-PatchPilot AI is released under the MIT License. It does not copy
-third-party source code into this repository; dependencies are installed
-from PyPI at the versions pinned in `uv.lock`.
+PatchPilot AI is released under the MIT License. The Python package does
+not copy third-party source code into this repository; its dependencies are
+installed from PyPI at the versions pinned in `uv.lock`. The static landing
+page in `site/` vendors a few unmodified files, listed at the end.
 
 Licenses below were read from each installed package's metadata. Re-check
 this list whenever a dependency is added.
@@ -71,3 +72,16 @@ only.
 All of these are compatible with distributing PatchPilot AI under the MIT
 License. `pathspec` (development only) and `certifi` (a bundle of certificate
 authority certificates, used unmodified) are under the weak-copyleft MPL-2.0.
+
+## Landing page (`site/`), vendored and unmodified
+
+Downloaded from the npm registry and copied without changes; the page loads
+them locally and makes no network requests. They are not part of the Python
+package.
+
+| File | Package and version | License |
+|---|---|---|
+| `site/vendor/three.module.min.js` | three 0.170.0 | MIT (`site/vendor/three.LICENSE`) |
+| `site/vendor/gsap.min.js`, `ScrollTrigger.min.js`, `SplitText.min.js` | gsap 3.13.0 | GSAP Standard "no charge" license, https://gsap.com/standard-license (stated in each file's header) |
+| `site/assets/fonts/space-grotesk-latin-wght-normal.woff2` | @fontsource-variable/space-grotesk 5.3.0 | SIL OFL 1.1 (`site/assets/fonts/space-grotesk.OFL.txt`) |
+| `site/assets/fonts/jetbrains-mono-latin-wght-normal.woff2` | @fontsource-variable/jetbrains-mono 5.3.0 | SIL OFL 1.1 (`site/assets/fonts/jetbrains-mono.OFL.txt`) |
