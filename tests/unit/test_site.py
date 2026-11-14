@@ -41,7 +41,7 @@ def test_headline_figures_match_the_benchmark() -> None:
     assert summary["repair"]["resolved_by_hidden_tests"] == 16
     page = (SITE / "index.html").read_text()
     assert "not the success rate of any language model" in page
-    assert "no real-model run yet" in page
+    assert "one real-model repair" in page
 
 
 def test_page_loads_nothing_from_the_network() -> None:

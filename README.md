@@ -13,9 +13,10 @@ in code outside it.
 
 **Status: experimental release. The pipeline is verified with scripted
 model answers, hosted Linux CI has passed, and one approved draft pull request
-was opened on a private synthetic repository. No real model has completed a
-run yet** (every live request so far was answered with HTTP 503 by the
-provider).
+was opened on a private synthetic repository. One real-model repair has
+passed:** a local open-weight model (`qwen3:8b` through Ollama) fixed
+`inj-001-cachekit`, confirmed by the hidden tests. That is one run, not a
+benchmark; free-tier Gemini answered every request with HTTP 503.
 
 | Milestone | State |
 |---|---|
@@ -23,7 +24,7 @@ provider).
 | 2. Foundation | Done; hosted Linux CI passed ([details](docs/ci-status.md)) |
 | 3. Sandbox and task format | Built and verified locally |
 | 4. Intake and repository tools | Built and verified locally |
-| 5. Baseline end to end, plus evaluator | Built; live pilot attempted, no model output ([details](docs/pilot-plan.md)) |
+| 5. Baseline end to end, plus evaluator | Done; one live repair with a local model resolved ([details](docs/live-model-run.md)) |
 | 6. Stateful repair loop | Loop, checkpoints and resume verified offline ([details](docs/repair-loop.md)) |
 | 7. Approval-gated draft PR | Verified against a fake GitHub; one real draft PR validated ([details](docs/github-submission.md)) |
 | 8. Evaluation and release | Scripted benchmark, security review and documentation done; live benchmark pending |

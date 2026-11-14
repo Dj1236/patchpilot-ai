@@ -195,6 +195,10 @@ def _live_model(settings: Settings) -> ModelClient:
             return GeminiModel()
         except ModelError as error:
             raise _refuse(str(error)) from None
+    if settings.provider == "ollama":
+        from patchpilot.llm.ollama_client import OllamaModel
+
+        return OllamaModel()
     from patchpilot.llm.anthropic_client import AnthropicModel
 
     return AnthropicModel()
@@ -370,6 +374,8 @@ def preflight(
     model-metadata and token-counting endpoints.
     """
     settings = _settings()
+    if settings.provider == "ollama":
+        raise _refuse("preflight is for hosted providers; a local Ollama model needs none")
     try:
         loaded = load_task(tasks_root / task)
     except TaskError as error:

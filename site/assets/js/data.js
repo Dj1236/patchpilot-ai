@@ -11,8 +11,8 @@ export const ZONES = {
 
 export const STATE = {
   verified: ['tag-ok', 'verified locally'],
-  scripted: ['tag-sim', 'scripted model only'],
   github: ['tag-ok', 'validated on GitHub'],
+  live: ['tag-ok', 'one live run'],
 };
 
 export const NODES = {
@@ -35,9 +35,9 @@ export const NODES = {
     ev: ['tests/unit/test_repo_tools.py'],
   },
   model: {
-    t: 'Model adapter', m: 'no fallback', z: 'host', state: 'scripted', mod: 'src/patchpilot/llm/',
+    t: 'Model adapter', m: 'no fallback', z: 'host', state: 'live', mod: 'src/patchpilot/llm/',
     rule: 'One approved model per process, from a fixed list. No fallback to another model or provider; SDK retries are off.',
-    pts: ['Adapters: free-tier Gemini, Anthropic, and the scripted fake that every test uses', 'The reported model identity must match the requested one', 'Every completed run so far used the scripted model: all 8 live Gemini generation requests got HTTP 503'],
+    pts: ['Adapters: free-tier Gemini, Anthropic, a local Ollama model, and the scripted fake that every test uses', 'The reported model identity must match the requested one', 'One live repair passed with local qwen3:8b; free-tier Gemini answered every request with HTTP 503'],
     ev: ['tests/unit/test_llm_gemini.py', 'tests/unit/test_model_selection.py'],
   },
   ledger: {

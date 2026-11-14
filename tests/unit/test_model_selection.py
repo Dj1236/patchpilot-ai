@@ -93,9 +93,13 @@ def test_run_limits_accept_only_approved_models_of_their_own_provider() -> None:
 
 
 def test_every_approved_model_has_a_pinned_price() -> None:
-    for models in APPROVED_MODELS.values():
+    for provider, models in APPROVED_MODELS.items():
         for model in models:
-            assert prices_for(model).output > 0
+            # Every model needs a pinned price; only local inference is free.
+            if provider == "ollama":
+                assert prices_for(model).output == 0
+            else:
+                assert prices_for(model).output > 0
     assert prices_for(OLDER) == prices_for(NEWER)
 
 
