@@ -12,7 +12,7 @@ export const ZONES = {
 export const STATE = {
   verified: ['tag-ok', 'verified locally'],
   scripted: ['tag-sim', 'scripted model only'],
-  fake: ['tag-sim', 'fake GitHub only'],
+  github: ['tag-ok', 'validated on GitHub'],
 };
 
 export const NODES = {
@@ -83,9 +83,9 @@ export const NODES = {
     ev: ['tests/unit/test_submit.py'],
   },
   draft: {
-    t: 'Draft PR', m: 'drafts only', z: 'ext', state: 'fake', mod: 'src/patchpilot/submit/submission.py',
+    t: 'Draft PR', m: 'drafts only', z: 'ext', state: 'github', mod: 'src/patchpilot/submit/submission.py',
     rule: 'The writer allows only listed requests to one repository. It reads before every write, creates one branch and one draft pull request, and never merges.',
-    pts: ['Classic tokens are refused; a separate fine-grained write token is used', 'A write with an unknown outcome is marked uncertain and never repeated', 'No real GitHub write has been made yet'],
+    pts: ['Classic tokens are refused; a separate fine-grained write token is used', 'A write with an unknown outcome is marked uncertain and never repeated', 'Validated once: an approved draft PR on a private synthetic repository; a second submission created nothing'],
     ev: ['tests/unit/test_submit.py', 'tests/fake_github.py'],
   },
 };
@@ -113,7 +113,7 @@ export const FLOWS = {
   submit: {
     name: 'Submission', path: ['sandbox', 'review', 'approval', 'draft'], extra: [],
     zones: ['sandbox', 'ext'], view: [150, 30, 1050, 472.5],
-    cap: 'Only a verified run can become a proposal. A person approves its exact digest, then one draft PR is opened. Tested against a fake GitHub API only.',
+    cap: 'Only a verified run can become a proposal. A person approves its exact digest, then one draft PR is opened. Tested against a fake GitHub API and validated once on a private synthetic repository.',
   },
 };
 

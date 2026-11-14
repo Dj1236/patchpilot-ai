@@ -74,7 +74,9 @@ bytes.
 - If a write was left `uncertain` and the approval then expires, `submit`
   refuses both the old approval (expired) and a new one (another approval).
   The run must then be checked on GitHub by hand. This fails closed.
-- No real GitHub write has been made; GitHub's real behavior is assumed from
-  its documentation.
+- One real GitHub submission has been made (draft PR #2 on a private
+  synthetic repository, gate C). Other real behaviour, such as rate limits
+  and list consistency after an `uncertain` write, is assumed from the
+  documentation.
 - Free-tier Gemini may use prompts for product improvement; only synthetic
   or approved public code may be sent.
