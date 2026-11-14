@@ -88,6 +88,10 @@ put listed tests inside classes.
 
 ## Adding a task
 
+Four tasks exist: `inj-001-cachekit` (state), `inj-002-exprcalc` (logic),
+`inj-003-rangespec` (input validation) and `inj-004-pager` (edge case).
+Scripted answers for the offline benchmark are in `evals/scripted/`.
+
 1. Create the layout above. Use only the standard library plus pytest.
 2. Write `task.toml`. Compute the pin with
    `patchpilot.sandbox.tree.tree_digest(collect_tree(Path("repo")))`.
