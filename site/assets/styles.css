@@ -129,6 +129,9 @@ b, strong { font-weight: 600; color: var(--ink); }
 .boot-step.is-done { color: var(--ink-2); }
 .boot-step.is-done::before { content: "✓ "; color: var(--ok); }
 .boot-step.is-skip::before { content: "– "; color: var(--warn); }
+.boot-step.is-busy::before { content: "◌ "; color: var(--signal); }
+@media (prefers-reduced-motion: no-preference) { .boot-step.is-busy { animation: busy 1.2s ease-in-out infinite; } }
+@keyframes busy { 50% { opacity: .45; } }
 .hero-title { margin: 0; max-width: 13ch; font: 640 clamp(44px, 6.1vw, 88px)/.96 var(--display); letter-spacing: -.045em; }
 .ht-line { display: block; }
 .ht-dim { color: var(--ink-3); }
