@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from patchpilot import __version__
-from patchpilot.agent.baseline import RepairLimits, RunLimits
+from patchpilot.agent.baseline import RepairLimits, RunLimits, RunRecord
 from patchpilot.agent.checkpoint import CheckpointError, load_checkpoint
 from patchpilot.agent.prompts import BugDescription
 from patchpilot.agent.repair import Interrupted
@@ -18,6 +18,7 @@ from patchpilot.agent.trace import (
     recorded_mode,
     recorded_outcome,
     replay_model,
+    secrets_from_environment,
     text_digest,
 )
 from patchpilot.config import Settings
@@ -53,6 +54,16 @@ from patchpilot.llm.preflight import (
 )
 from patchpilot.repo.fetch import FetchError
 from patchpilot.sandbox.docker import DockerSandbox
+from patchpilot.submit.approval import (
+    CONFIRM_CHARS,
+    ApprovalError,
+    check_approval,
+    load_approval,
+    save_approval,
+)
+from patchpilot.submit.approval import approve as make_approval
+from patchpilot.submit.proposal import ProposalError, build_proposal, load_proposal, save_proposal
+from patchpilot.submit.submission import GitHubWriter, SubmissionError, submit_proposal
 from patchpilot.tasks.loader import TaskError, discover_tasks, load_task
 
 app = typer.Typer(
@@ -503,3 +514,120 @@ def probe() -> None:
     typer.echo("one generation request was sent; nothing was retried")
     if not result.response_received:
         raise typer.Exit(code=1)
+
+
+# -- pull request proposal, approval and submission -----------------------------------------
+
+
+def _run_directory(settings: Settings, run_dir: Path) -> Path:
+    directory, root = run_dir.resolve(), settings.runs_dir.resolve()
+    if directory == root or not directory.is_relative_to(root) or not directory.is_dir():
+        raise _refuse(f"use a run directory inside the runs folder {root}")
+    return directory
+
+
+@app.command(name="propose-pr")
+def propose_pr(
+    run_dir: Annotated[Path, typer.Argument(help="Directory of a finished, verified run.")],
+    repository: Annotated[str, typer.Option(help="Approved repository, owner/name.")],
+    issue: Annotated[int, typer.Option(min=1, help="Issue number in that repository.")],
+    base_branch: Annotated[str, typer.Option(help="Branch the pull request targets.")] = "main",
+    tasks_root: Annotated[Path, typer.Option(help="Folder holding the tasks.")] = TASKS_ROOT,
+) -> None:
+    """Write a reviewable pull request proposal for a verified run. Sends nothing."""
+    settings = _settings()
+    directory = _run_directory(settings, run_dir)
+    try:
+        record_bytes = (directory / "record.json").read_bytes()
+        record = RunRecord.model_validate(json.loads(record_bytes)["record"])
+        owner, _, name = repository.lower().partition("/")
+        approved = load_allowlist(settings.allowlist_path).find(owner, name)
+        if approved is None:
+            raise ProposalError(f"{repository} is not in the allowlist")
+        loaded = load_task(tasks_root / record.task_id)
+        proposal = build_proposal(
+            record,
+            record_bytes,
+            loaded.agent_files(),
+            approved,
+            issue_number=issue,
+            base_branch=base_branch,
+            secrets=secrets_from_environment(),
+        )
+    except (OSError, ValueError, KeyError, ProposalError, TaskError, AllowlistError) as error:
+        raise _refuse(f"no proposal: {error}") from None
+    save_proposal(directory, proposal)
+    typer.echo(f"proposal: {directory / 'pr-proposal.md'}")
+    typer.echo(f"patch digest: {proposal.patch_sha256}")
+    typer.echo("nothing was sent; review the proposal, then run patchpilot approve")
+
+
+@app.command()
+def approve(
+    run_dir: Annotated[Path, typer.Argument(help="Directory holding a pull request proposal.")],
+) -> None:
+    """Show a proposal and record a person's approval of exactly that proposal."""
+    settings = _settings()
+    directory = _run_directory(settings, run_dir)
+    try:
+        proposal = load_proposal(directory)
+    except ProposalError as error:
+        raise _refuse(str(error)) from None
+    typer.echo(f"Repository: {proposal.repository} (id {proposal.repository_id})")
+    typer.echo(f"Issue: #{proposal.issue_number}")
+    typer.echo(f"Base: {proposal.base_branch} at {proposal.base_commit}")
+    typer.echo(f"Files: {', '.join(change.path for change in proposal.changes)}")
+    typer.echo("Intended GitHub operations:")
+    for index, item in enumerate(proposal.operations, start=1):
+        typer.echo(f"  {index}. {item}")
+    typer.echo(f"Patch digest: {proposal.patch_sha256}")
+    typer.echo(f"Review the full proposal in {directory / 'pr-proposal.md'} first.")
+    answer = typer.prompt(
+        f"To approve, type the first {CONFIRM_CHARS} characters of the patch digest"
+    )
+    try:
+        approval = make_approval(proposal, answer)
+    except ApprovalError as error:
+        typer.echo(f"not approved: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    save_approval(directory, approval)
+    typer.echo(f"approved until {approval.expires_at.isoformat()}; run patchpilot submit")
+
+
+def _github_writer(repository: str, token: SecretStr) -> GitHubWriter:
+    return GitHubWriter(repository, token)
+
+
+@app.command()
+def submit(
+    run_dir: Annotated[Path, typer.Argument(help="Directory holding an approved proposal.")],
+) -> None:
+    """Open the approved proposal as a draft pull request. A real GitHub write.
+
+    Needs PATCHPILOT_GITHUB_WRITE_TOKEN and a valid approval of this exact
+    proposal. Checks GitHub with read-only requests before every write, never
+    repeats a write whose outcome is unknown, and never merges.
+    """
+    settings = _settings()
+    directory = _run_directory(settings, run_dir)
+    try:
+        proposal = load_proposal(directory)
+        approval = load_approval(directory)
+        check_approval(approval, proposal)
+    except (ProposalError, ApprovalError) as error:
+        raise _refuse(str(error)) from None
+    if settings.github_write_token is None:
+        raise _refuse(
+            "set PATCHPILOT_GITHUB_WRITE_TOKEN to a fine-grained token for one repository"
+        )
+    writer = _github_writer(proposal.repository, settings.github_write_token)
+    try:
+        result = submit_proposal(proposal, approval, writer, directory)
+    except (SubmissionError, ApprovalError) as error:
+        state = "uncertain" if getattr(error, "uncertain", False) else "failed"
+        typer.echo(f"{state}: {error}", err=True)
+        raise typer.Exit(code=1) from None
+    finally:
+        writer.close()
+    typer.echo(f"draft pull request #{result.pull_request_number}: {result.pull_request_url}")
+    typer.echo(f"branch {result.branch} at {result.commit_sha}; nothing was merged")

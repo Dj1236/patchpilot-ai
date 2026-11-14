@@ -56,6 +56,13 @@ class Settings(BaseSettings):
         default=None,
         description="Optional read-only token, sent to api.github.com only. Never to git.",
     )
+    github_write_token: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Fine-grained token for one repository, used only by patchpilot submit after "
+            "a person approved the exact proposal. Never used by intake or by the agent."
+        ),
+    )
 
     @field_validator("gemini_model")
     @classmethod
@@ -71,7 +78,7 @@ class Settings(BaseSettings):
         """The one model this process may use for the configured provider."""
         return self.gemini_model if self.provider == "gemini" else PINNED_MODELS[self.provider]
 
-    @field_validator("github_token", "allowlist_path", mode="before")
+    @field_validator("github_token", "github_write_token", "allowlist_path", mode="before")
     @classmethod
     def _empty_means_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
