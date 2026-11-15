@@ -183,9 +183,14 @@ def test_requests_are_paced_to_the_per_minute_token_limit() -> None:
         ).complete(_request())
 
 
-def test_a_refused_tool_call_is_an_unusable_answer_charged_in_full() -> None:
-    body = {"error": {"message": "Failed to call a function.", "code": "tool_use_failed"}}
-    turn = Server(httpx.Response(400, json=body)).model().complete(_request())
-    assert turn.stop_reason == "other" and turn.text == "" and turn.tool_calls == ()
-    assert turn.model == MODEL and turn.usage.output_tokens == 4096
-    assert turn.usage.input_tokens > 0
+def test_a_refused_tool_call_is_the_models_answer_charged_in_full() -> None:
+    error = {"message": "Failed to call a function.", "code": "tool_use_failed"}
+    raw = '{"summary": "fix"}'
+    server = Server(httpx.Response(400, json={"error": {**error, "failed_generation": raw}}))
+    answer = server.model().complete(_request())
+    assert answer.stop_reason == "end_turn" and answer.text == raw and answer.tool_calls == ()
+    assert answer.content[0]["message"] == {"role": "assistant", "content": raw}
+    empty = Server(httpx.Response(400, json={"error": error})).model().complete(_request())
+    assert empty.text == "" and empty.content[0]["message"]["content"] == "(no answer)"
+    assert empty.model == MODEL and empty.usage.output_tokens == 4096
+    assert empty.usage.input_tokens > 0
