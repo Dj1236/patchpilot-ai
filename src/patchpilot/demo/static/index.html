@@ -31,7 +31,7 @@ table{width:100%;border-collapse:collapse;font-size:14px;margin-top:10px}td,th{t
 <main class="wrap">
   <p class="k">PatchPilot AI · live demo</p>
   <h1>Run a real repair on a synthetic bug.</h1>
-  <p class="note">A real local model (<b>qwen3:8b</b> through Ollama) investigates the task with read-only tools and proposes a patch. PatchPilot checks it in a locked-down Docker sandbox, then grades it with hidden tests. Only the four built-in synthetic tasks can be run, one job at a time; a run can take several minutes. Nothing is written to GitHub. <a href="https://patchpilot-ai-site.vercel.app/">About the project</a></p>
+  <p class="note">A real model (<b id="model-name">loading</b>) investigates the task with read-only tools and proposes a patch. PatchPilot checks it in a locked-down Docker sandbox, then grades it with hidden tests. Only the four built-in synthetic tasks can be run, one job at a time; a run can take several minutes. Nothing is written to GitHub. <a href="https://patchpilot-ai-site.vercel.app/">About the project</a></p>
 
   <section class="card" aria-labelledby="start">
     <h2 id="start" class="k">Start a run</h2>
@@ -67,6 +67,7 @@ let timer = 0;
 async function init() {
   const [health, tasks] = await Promise.all([fetch('/api/health').then((r) => r.json()), fetch('/api/tasks').then((r) => r.json())]);
   $('code-wrap').hidden = !health.access_code_required;
+  text($('model-name'), health.model);
   tasks.forEach((t) => { const o = document.createElement('option'); o.value = t.id; o.textContent = `${t.id}: ${t.title}`; $('task').appendChild(o); });
 }
 

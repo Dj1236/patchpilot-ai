@@ -171,3 +171,11 @@ def test_the_demo_provider_is_ollama_or_groq_only(monkeypatch: Any) -> None:
     monkeypatch.setenv("PATCHPILOT_DEMO_PROVIDER", "anthropic")
     with pytest.raises(ValueError, match="PATCHPILOT_DEMO_PROVIDER"):
         demo_provider()
+
+
+def test_health_names_the_configured_model(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.delenv("PATCHPILOT_DEMO_PROVIDER", raising=False)
+    assert _client(tmp_path).get("/api/health").json()["model"] == "qwen3:8b (local, Ollama)"
+    monkeypatch.setenv("PATCHPILOT_DEMO_PROVIDER", "groq")
+    health = _client(tmp_path / "groq").get("/api/health").json()
+    assert health["model"] == "openai/gpt-oss-120b (Groq free tier)"

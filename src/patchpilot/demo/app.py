@@ -2,7 +2,7 @@
 
 Visitors pick one of the built-in synthetic tasks; nothing else can be
 submitted. A single worker thread runs PatchPilot's normal repair pipeline
-with the local Ollama model and the Docker sandbox, and the page polls for
+with one model (local Ollama or Groq's free tier) and the Docker sandbox, and the page polls for
 progress read from the run's own trace. Abuse controls: an optional access
 code, a per-address hourly limit, a daily limit, a short queue, one job at a
 time, and every run budget of the agent itself. No GitHub token is used and
@@ -27,6 +27,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from patchpilot.eval.harness import TaskRun
+from patchpilot.llm.base import PINNED_MODELS
 from patchpilot.tasks.loader import discover_tasks
 
 TASKS_ROOT = Path(__file__).resolve().parents[3] / "evals" / "tasks"
@@ -200,6 +201,10 @@ def create_app(
 
     threading.Thread(target=work, name="patchpilot-demo-worker", daemon=True).start()
     app = FastAPI(title="PatchPilot AI demo", docs_url=None, redoc_url=None, openapi_url=None)
+    provider = demo_provider()
+    model_label = PINNED_MODELS[provider] + (
+        " (Groq free tier)" if provider == "groq" else " (local, Ollama)"
+    )
 
     @app.get("/")
     def page() -> FileResponse:
@@ -209,7 +214,7 @@ def create_app(
     def health() -> dict[str, Any]:
         return {
             "ok": True,
-            "model": "qwen3:8b (local, Ollama)",
+            "model": model_label,
             "queued": pending.qsize(),
             "running": sum(1 for job in jobs.values() if job.state == "running"),
             "access_code_required": bool(bounds.access_code),
