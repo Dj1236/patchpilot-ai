@@ -75,9 +75,12 @@ configuration reference and troubleshooting.
 ## Live demo (gate F)
 
 `patchpilot.demo` is a small FastAPI service with its own page: visitors run
-one of the four synthetic tasks with the local model and see the tool calls,
-patch, sandbox checks and hidden-test verdict. It is verified locally and
-**not deployed yet**; see [deploy/README.md](deploy/README.md).
+one of the four synthetic tasks with one model and see the tool calls,
+patch, sandbox checks and hidden-test verdict. It is live at
+<https://54-252-135-177.sslip.io/> with `openai/gpt-oss-120b` on Groq's free
+tier; starting a run needs an access code from the owner. Evidence, including
+the failed runs: [docs/hosted-demo.md](docs/hosted-demo.md). Deployment:
+[deploy/README.md](deploy/README.md).
 
 ```
 uv sync --extra demo

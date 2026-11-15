@@ -85,9 +85,10 @@
     <p class="hero-lede">PatchPilot AI is an autonomous repair agent for approved Python repositories. The model only reads and proposes. Allowlists, patch rules, budgets, a locked-down sandbox, hidden-test grading and a human approval gate are enforced in code outside it.</p>
     <div class="cta">
       <a class="btn btn-primary magnetic dir-fill" href="https://github.com/Dj1236/patchpilot-ai" data-cursor="github"><span>View on GitHub</span><span class="arrow" aria-hidden="true">↗</span></a>
+      <a class="btn btn-ghost magnetic dir-fill" href="https://54-252-135-177.sslip.io/" data-cursor="demo"><span>Live demo (access code)</span><span class="arrow" aria-hidden="true">↗</span></a>
       <a class="btn btn-ghost magnetic dir-fill" href="#architecture" data-cursor="explore"><span>Explore the architecture</span><span class="arrow" aria-hidden="true">↓</span></a>
     </div>
-    <p class="hero-status"><span class="dot dot-ok" aria-hidden="true"></span>Built and verified offline <span class="sep" aria-hidden="true">/</span> <span class="dot dot-warn" aria-hidden="true"></span>one real-model repair, local <code>qwen3:8b</code></p>
+    <p class="hero-status"><span class="dot dot-ok" aria-hidden="true"></span>Built and verified offline <span class="sep" aria-hidden="true">/</span> <span class="dot dot-warn" aria-hidden="true"></span>one real-model repair, local <code>qwen3:8b</code> <span class="sep" aria-hidden="true">/</span> one public repair, <code>gpt-oss-120b</code> on Groq</p>
 
     <figure class="evidence" aria-labelledby="evidence-cap">
       <div class="ev-bar-top">
@@ -446,14 +447,15 @@
   <div class="wrap">
     <header class="section-head">
       <p class="label mono" data-scramble>current status</p>
-      <h2 id="status-title" class="split">All five release gates passed. Still experimental.</h2>
+      <h2 id="status-title" class="split">All release gates passed, live demo online. Still experimental.</h2>
     </header>
     <div class="st-grid">
       <article class="st st-ok spot">
         <h3><span class="dot dot-ok" aria-hidden="true"></span>Verified</h3>
         <ul>
-          <li>1,061 tests pass (3 skipped, 1 expected failure), 94% coverage, Ruff and strict mypy clean</li>
+          <li>1,096 tests pass (3 skipped, 1 expected failure), 93% coverage, Ruff and strict mypy clean</li>
           <li>One live repair by local <code>qwen3:8b</code>: 5 tool calls, a rejected first proposal, then a fix the hidden tests confirmed</li>
+          <li>One public repair through the live demo by <code>openai/gpt-oss-120b</code> on Groq's free tier: a rejected first proposal, then a fix the hidden tests confirmed; two earlier public runs failed and are reported</li>
           <li>Hosted Linux CI passed on <code>469074e</code>, Docker sandbox and grading tests included</li>
           <li>One approved draft PR on a private synthetic repository: branch matched the proposal byte for byte; a second submission created nothing</li>
           <li>Sandbox limits attacked in a real Docker container, locally and on Linux CI</li>
@@ -484,6 +486,7 @@
       <li class="g-ok"><b>C</b><span>Real GitHub draft PR</span><em>passed · approved draft PR</em></li>
       <li class="g-ok"><b>D</b><span>Hosted Linux CI</span><em>passed · run 43586146851</em></li>
       <li class="g-ok"><b>E</b><span>Public release</span><em>passed · experimental</em></li>
+      <li class="g-ok"><b>F</b><span>Public online demo</span><em>passed · one public run</em></li>
     </ol>
     <p class="fine">Documented, not solved: tests can forge their own results in the same process, the container shares the host kernel, and the approval is an unsigned local file. See the <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/security-review.md">security review</a> and <a href="https://github.com/Dj1236/patchpilot-ai/blob/main/docs/ci-status.md">CI status</a>.</p>
   </div>

@@ -23,8 +23,10 @@ not adopted (decision 15). Milestone 7 (approval-gated draft PRs,
 `patchpilot benchmark --scripted`, security review, release docs) are done.
 One real draft PR was validated on a private synthetic repository (gate C).
 Gate B passed with one live repair by a local model (`PATCHPILOT_PROVIDER=ollama`,
-`qwen3:8b`, `docs/live-model-run.md`). All five gates are passed. See
-`docs/release-checklist.md`.
+`qwen3:8b`, `docs/live-model-run.md`). All five gates are passed. Gate F (hosted demo) passed on 2026-11-15:
+AWS Free-plan `m7i-flex.large` with `openai/gpt-oss-120b` on Groq's free tier
+(`PATCHPILOT_PROVIDER=groq`, `docs/hosted-demo.md`); keep the AWS account on
+the Free plan. See `docs/release-checklist.md`.
 PatchPilot does not load `.env`; the key comes from the process environment.
 Milestone 6 is not started and waits for measured live results. Hosted Linux CI passed on `469074e` (run 43586146851,
 sandbox tests included); see `docs/ci-status.md`. Describe CI as green only

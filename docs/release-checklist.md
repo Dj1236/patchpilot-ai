@@ -13,7 +13,7 @@ a local fake GitHub, and the real sandbox on a local Docker engine.
 
 | Gate | Status | Evidence | Remaining action | Owner approval needed |
 |---|---|---|---|---|
-| F. Public online demo | **Built, not deployed** | `patchpilot.demo` (FastAPI) verified locally end to end with `qwen3:8b` and Docker: `inj-004-pager` resolved through the API in 33 s; `inj-003-rangespec` ended `invalid_proposal` after 3 proposals in the browser; 8 API tests for limits and failures ([deploy/README.md](../deploy/README.md)) | Create a host (Oracle Cloud Always Free or another Docker host), deploy, measure CPU-only run time, then link it from the website | Yes: account, host and public endpoint |
+| F. Public online demo | **Passed (one public run)** | <https://54-252-135-177.sslip.io/> on an AWS Free-plan `m7i-flex.large` (ap-southeast-2) with `openai/gpt-oss-120b` on Groq's free tier, 2026-11-15: `inj-004-pager` through the public URL, proposal 1 rejected, proposal 2 `candidate_verified`, hidden tests **resolved**, 375 s, $0. Two earlier public runs and one laptop run failed and are reported; security checks before exposure; access code, 5 runs a day ([hosted-demo.md](hosted-demo.md)) | None; the budget stops the host at 75 USD of credit | Yes: account, host and public endpoint |
 
 ## What may proceed without approval
 
