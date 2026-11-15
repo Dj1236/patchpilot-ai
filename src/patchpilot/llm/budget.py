@@ -59,6 +59,10 @@ PRICES: dict[str, Prices] = {
     # Local inference through Ollama: no per-request charge. Requests are still
     # reserved and settled, and every token and attempt limit still applies.
     "qwen3:8b": Prices(input=0, output=0, cache_write=0, cache_read=0),
+    # Used on Groq's free tier, which charges nothing. Its published list
+    # prices (0.15 and 0.60 USD, read 2026-11-15) are rounded up so the ledger
+    # still bounds what a run could cost on a paid plan.
+    "openai/gpt-oss-120b": Prices(input=1, output=1, cache_write=1, cache_read=1),
 }
 
 

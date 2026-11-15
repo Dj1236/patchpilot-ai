@@ -29,6 +29,7 @@ _FREE_TIER_NOTE = {
         " (list-price upper bound; the free tier charges nothing unless the key's "
         "project has billing enabled)"
     ),
+    "groq": " (list-price upper bound; Groq's free tier charges nothing)",
     "ollama": " (local inference: no API charge; compute time is not metered in dollars)",
 }
 

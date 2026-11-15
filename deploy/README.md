@@ -4,7 +4,16 @@ The demo is `patchpilot.demo.app`: a FastAPI service that runs PatchPilot's
 normal repair pipeline with a local open-weight model (Ollama, `qwen3:8b`)
 and the Docker sandbox, on the four built-in synthetic tasks only. It needs
 one Linux host with Docker, about 8 GB of free memory and no GPU.
-**Status: built and verified end to end on a laptop; not deployed.**
+**Status: deployed** at <https://54-252-135-177.sslip.io/> on an AWS
+Free-plan `m7i-flex.large` with Groq instead of Ollama; see
+[docs/hosted-demo.md](../docs/hosted-demo.md).
+
+With Groq (`PATCHPILOT_DEMO_PROVIDER=groq`), skip Ollama: add
+`GROQ_API_KEY` to `/etc/patchpilot/demo.env` (written through stdin, never
+on a command line) and the host needs only Docker, about 1 GB of memory in
+use. `PATCHPILOT_DEMO_PER_DAY`, `PATCHPILOT_DEMO_PER_ADDRESS_PER_HOUR` and
+`PATCHPILOT_DEMO_MAX_QUEUE` set the public limits (5, 2 and 1 on the live
+host).
 
 ## Controls
 

@@ -91,7 +91,12 @@ class RunLimits(FrozenModel):
     @classmethod
     def for_provider(cls, provider: Provider, model: str | None = None) -> "RunLimits":
         """Return the limits for one provider and one of its approved models."""
-        return cls(provider=provider, model=model or PINNED_MODELS[provider])
+        chosen = model or PINNED_MODELS[provider]
+        if provider == "groq":
+            # Groq counts the requested output against the free 8,000 tokens per
+            # minute, so a 16,000 token request could never be served.
+            return cls(provider=provider, model=chosen, max_output_tokens=2_048)
+        return cls(provider=provider, model=chosen)
 
     def digest(self) -> str:
         return hashlib.sha256(self.model_dump_json().encode()).hexdigest()

@@ -6,9 +6,10 @@ import time
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
-from patchpilot.demo.app import Limits, create_app, trace_events
+from patchpilot.demo.app import Limits, create_app, demo_provider, trace_events
 
 RESULT = {
     "status": "candidate_verified",
@@ -160,3 +161,21 @@ def test_trace_events_ignore_broken_lines(tmp_path: Path) -> None:
     trace.write_text('not json\n{"type": "finish"}\n')
     assert trace_events(trace) == ["run finished"]
     assert trace_events(tmp_path / "missing.jsonl") == []
+
+
+def test_the_demo_provider_is_ollama_or_groq_only(monkeypatch: Any) -> None:
+    monkeypatch.delenv("PATCHPILOT_DEMO_PROVIDER", raising=False)
+    assert demo_provider() == "ollama"
+    monkeypatch.setenv("PATCHPILOT_DEMO_PROVIDER", "groq")
+    assert demo_provider() == "groq"
+    monkeypatch.setenv("PATCHPILOT_DEMO_PROVIDER", "anthropic")
+    with pytest.raises(ValueError, match="PATCHPILOT_DEMO_PROVIDER"):
+        demo_provider()
+
+
+def test_health_names_the_configured_model(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.delenv("PATCHPILOT_DEMO_PROVIDER", raising=False)
+    assert _client(tmp_path).get("/api/health").json()["model"] == "qwen3:8b (local, Ollama)"
+    monkeypatch.setenv("PATCHPILOT_DEMO_PROVIDER", "groq")
+    health = _client(tmp_path / "groq").get("/api/health").json()
+    assert health["model"] == "openai/gpt-oss-120b (Groq free tier)"
