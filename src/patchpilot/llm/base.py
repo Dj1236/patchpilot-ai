@@ -24,7 +24,7 @@ ErrorKind = Literal[
     "connection",
     "api_error",
 ]
-Provider = Literal["anthropic", "gemini", "ollama"]
+Provider = Literal["anthropic", "gemini", "ollama", "groq"]
 
 # The default model of each provider.
 PINNED_MODELS: dict[Provider, str] = {
@@ -32,6 +32,8 @@ PINNED_MODELS: dict[Provider, str] = {
     "gemini": "gemini-3.8-flash",
     # A local open-weight model, served by Ollama on this machine.
     "ollama": "qwen3:8b",
+    # Hosted on Groq's free API tier; a production model with tool use.
+    "groq": "openai/gpt-oss-120b",
 }
 
 # The only models a run may use. This is a list to choose from, not a
@@ -42,6 +44,7 @@ APPROVED_MODELS: dict[Provider, tuple[str, ...]] = {
     "anthropic": ("claude-sonnet-5-5",),
     "gemini": ("gemini-3.8-flash", "gemini-3.6-flash"),
     "ollama": ("qwen3:8b",),
+    "groq": ("openai/gpt-oss-120b",),
 }
 
 

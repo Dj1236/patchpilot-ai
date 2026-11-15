@@ -6,9 +6,10 @@ import time
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
-from patchpilot.demo.app import Limits, create_app, trace_events
+from patchpilot.demo.app import Limits, create_app, demo_provider, trace_events
 
 RESULT = {
     "status": "candidate_verified",
@@ -160,3 +161,13 @@ def test_trace_events_ignore_broken_lines(tmp_path: Path) -> None:
     trace.write_text('not json\n{"type": "finish"}\n')
     assert trace_events(trace) == ["run finished"]
     assert trace_events(tmp_path / "missing.jsonl") == []
+
+
+def test_the_demo_provider_is_ollama_or_groq_only(monkeypatch: Any) -> None:
+    monkeypatch.delenv("PATCHPILOT_DEMO_PROVIDER", raising=False)
+    assert demo_provider() == "ollama"
+    monkeypatch.setenv("PATCHPILOT_DEMO_PROVIDER", "groq")
+    assert demo_provider() == "groq"
+    monkeypatch.setenv("PATCHPILOT_DEMO_PROVIDER", "anthropic")
+    with pytest.raises(ValueError, match="PATCHPILOT_DEMO_PROVIDER"):
+        demo_provider()

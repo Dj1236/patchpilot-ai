@@ -199,6 +199,13 @@ def _live_model(settings: Settings) -> ModelClient:
         from patchpilot.llm.ollama_client import OllamaModel
 
         return OllamaModel()
+    if settings.provider == "groq":
+        from patchpilot.llm.groq_client import GroqModel
+
+        try:
+            return GroqModel()
+        except ModelError as error:
+            raise _refuse(str(error)) from None
     from patchpilot.llm.anthropic_client import AnthropicModel
 
     return AnthropicModel()
@@ -374,8 +381,8 @@ def preflight(
     model-metadata and token-counting endpoints.
     """
     settings = _settings()
-    if settings.provider == "ollama":
-        raise _refuse("preflight is for hosted providers; a local Ollama model needs none")
+    if settings.provider in ("ollama", "groq"):
+        raise _refuse("preflight counts tokens for Anthropic and Gemini only")
     try:
         loaded = load_task(tasks_root / task)
     except TaskError as error:

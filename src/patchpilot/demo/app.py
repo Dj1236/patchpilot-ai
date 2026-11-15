@@ -20,7 +20,7 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -122,27 +122,45 @@ def summarize(run: TaskRun) -> dict[str, Any]:
     }
 
 
+def demo_provider() -> Literal["ollama", "groq"]:
+    """The demo host's one provider: local Ollama (default) or Groq's free tier."""
+    provider = os.environ.get("PATCHPILOT_DEMO_PROVIDER", "ollama")
+    if provider not in ("ollama", "groq"):
+        raise ValueError(f"PATCHPILOT_DEMO_PROVIDER must be ollama or groq, not {provider!r}")
+    return "groq" if provider == "groq" else "ollama"
+
+
 def live_runner(task_id: str, directory: Path) -> dict[str, Any]:
-    """Run the real pipeline: local model, Docker sandbox, hidden-test grading."""
+    """Run the real pipeline: one model, Docker sandbox, hidden-test grading."""
     from patchpilot.agent.baseline import RepairLimits, RunLimits
     from patchpilot.eval.harness import run_task
+    from patchpilot.llm.base import ModelClient
     from patchpilot.llm.budget import SpendLedger
-    from patchpilot.llm.ollama_client import OllamaModel
     from patchpilot.sandbox.docker import DockerSandbox
     from patchpilot.tasks.loader import load_task
 
+    provider = demo_provider()
+    model: ModelClient
+    if provider == "groq":
+        from patchpilot.llm.groq_client import GroqModel
+
+        model = GroqModel()
+    else:
+        from patchpilot.llm.ollama_client import OllamaModel
+
+        model = OllamaModel()
     sandbox = DockerSandbox()
     if not sandbox.is_available():
         raise RuntimeError("the sandbox engine is not available")
     run = run_task(
         load_task(TASKS_ROOT / task_id),
         1,
-        model=OllamaModel(),
+        model=model,
         sandbox=sandbox,
         ledger=SpendLedger(directory.parent / "ledger.jsonl", 5.0),
         run_cap_usd=0.75,
         output_dir=directory,
-        limits=RunLimits.for_provider("ollama"),
+        limits=RunLimits.for_provider(provider),
         mode="repair",
         repair=RepairLimits(),
     )
