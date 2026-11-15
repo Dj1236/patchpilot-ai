@@ -34,6 +34,10 @@ _EFFORT = {"low": "low", "medium": "medium", "high": "high", "xhigh": "high", "m
 # prompt plus its requested output. A little is kept back for estimate error.
 TOKENS_PER_MINUTE = 7_500
 _WINDOW_SECONDS = 60.0
+OMITTED = (
+    "[earlier tool output omitted to fit Groq's free per-request limit; "
+    "call the tool again if you need it]"
+)
 _WAIT = re.compile(r"try again in (?:(\d+)m)?([\d.]+)s")
 
 
@@ -75,6 +79,58 @@ def _tool_call(raw: object) -> ToolCall:
     if not (isinstance(call_id, str) and isinstance(name, str) and isinstance(arguments, dict)):
         raise ModelError("api_error", "the model sent a malformed tool call")
     return ToolCall(id=call_id, name=name, arguments=arguments)
+
+
+# Tokens per byte of request JSON. 0.4 (2.5 bytes a token) is the measured
+# rate for code; prose is lower. Each answer's real prompt count replaces it.
+DEFAULT_TOKENS_PER_BYTE = 0.4
+# A proposal with its reasoning needs about this much room to answer.
+MIN_OUTPUT_TOKENS = 1_024
+
+
+def estimated_tokens(body: dict[str, Any], per_byte: float = DEFAULT_TOKENS_PER_BYTE) -> int:
+    """Prompt tokens of a request, from its size."""
+    return int(len(json.dumps(body).encode()) * per_byte) + 1
+
+
+def fit(
+    body: dict[str, Any], limit: int, per_byte: float = DEFAULT_TOKENS_PER_BYTE
+) -> dict[str, Any]:
+    """Shrink a request until its prompt and requested output fit within ``limit``.
+
+    First the content of the oldest tool results is replaced, oldest first,
+    with a note that the model may call the tool again. The task, every
+    feedback message, every assistant turn and the newest tool result are
+    kept. Then the requested output is lowered, never below
+    ``MIN_OUTPUT_TOKENS``. The result may still be too large; the caller checks.
+    """
+    messages = [dict(message) for message in body["messages"]]
+    fitted = {**body, "messages": messages}
+    output = body["max_completion_tokens"]
+    tools = [i for i, message in enumerate(messages) if message["role"] == "tool"]
+    for index in tools[:-1]:
+        if estimated_tokens(fitted, per_byte) + output <= limit:
+            break
+        messages[index]["content"] = OMITTED
+    room = limit - estimated_tokens(fitted, per_byte)
+    fitted["max_completion_tokens"] = max(min(output, room), min(output, MIN_OUTPUT_TOKENS))
+    return fitted
+
+
+def _unwrapped(text: str) -> str:
+    """gpt-oss sometimes wraps its final answer in a call to a tool named ``json``."""
+    try:
+        value = json.loads(text)
+    except ValueError:
+        return text
+    if (
+        isinstance(value, dict)
+        and set(value) == {"name", "arguments"}
+        and value["name"] == "json"
+        and isinstance(value["arguments"], dict)
+    ):
+        return json.dumps(value["arguments"])
+    return text
 
 
 def _code(body: str) -> str:
@@ -146,11 +202,17 @@ class GroqModel:
         self._clock = clock
         self._sleep = sleep
         self._sent: deque[tuple[float, int]] = deque()
+        self._per_byte = DEFAULT_TOKENS_PER_BYTE
 
     def _pace(self, tokens: int) -> None:
         """Wait until the last minute's requests leave room for this one."""
         if tokens > self._per_minute:
-            raise ModelError("api_error", "the request is larger than Groq's free per-minute limit")
+            # Waiting cannot help: one request may not exceed the per-minute limit.
+            raise ModelError(
+                "api_error",
+                f"one request needs about {tokens} tokens, more than Groq's free "
+                f"limit of {self._per_minute} a minute, even with older tool output omitted",
+            )
         while True:
             now = self._clock()
             while self._sent and self._sent[0][0] <= now - _WINDOW_SECONDS:
@@ -185,7 +247,7 @@ class GroqModel:
 
     def count_input_tokens(self, request: ModelRequest) -> int:
         """Estimate input tokens from the request size; Groq has no counting endpoint."""
-        return len(json.dumps(self.body(request)).encode()) // 3 + 1_000
+        return estimated_tokens(fit(self.body(request), self._per_minute, self._per_byte))
 
     def _unusable(self, request: ModelRequest, body: dict[str, Any], error: str) -> ModelTurn:
         """Groq refused the model's own output as a malformed tool call.
@@ -203,10 +265,10 @@ class GroqModel:
         return ModelTurn(
             stop_reason="end_turn",
             content=({"type": _BLOCK, "message": kept},),
-            text=_unfenced(generated),
+            text=_unwrapped(_unfenced(generated)),
             tool_calls=(),
             usage=Usage(
-                input_tokens=len(json.dumps(body).encode()) // 3 + 1_000,
+                input_tokens=estimated_tokens(body, self._per_byte),
                 output_tokens=request.max_tokens,
             ),
             model=request.model,
@@ -214,9 +276,9 @@ class GroqModel:
         )
 
     def complete(self, request: ModelRequest) -> ModelTurn:
-        body = self.body(request)
-        # About 4 bytes a token; Groq counts the requested output in full.
-        self._pace(len(json.dumps(body).encode()) // 4 + request.max_tokens)
+        body = fit(self.body(request), self._per_minute, self._per_byte)
+        # Groq counts the requested output in full against the per-minute limit.
+        self._pace(estimated_tokens(body, self._per_byte) + body["max_completion_tokens"])
         try:
             response = self._client.post("/chat/completions", json=body)
         except httpx.TimeoutException:
@@ -243,6 +305,11 @@ class GroqModel:
             raise ModelError("api_error", "Groq's answer is not in the expected format") from None
         if reported != request.model:
             raise ModelError("api_error", "Groq answered with a different model")
+        prompt = int(usage.get("prompt_tokens") or 0)
+        if prompt > 0:
+            # Calibrate on the real count, with a 10% margin, within sane bounds.
+            measured = prompt / len(json.dumps(body).encode()) * 1.1
+            self._per_byte = min(0.5, max(0.2, measured))
 
         # The reasoning text is not sent back; only the answer and its tool calls are.
         kept: dict[str, Any] = {"role": "assistant", "content": str(message.get("content") or "")}
