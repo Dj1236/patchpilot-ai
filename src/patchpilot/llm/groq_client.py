@@ -77,6 +77,13 @@ def _tool_call(raw: object) -> ToolCall:
     return ToolCall(id=call_id, name=name, arguments=arguments)
 
 
+def _code(body: str) -> str:
+    try:
+        return str((json.loads(body).get("error") or {}).get("code", ""))
+    except (ValueError, AttributeError):
+        return ""
+
+
 def failure(status: int, body: str, retry_after: str | None) -> ModelError:
     """Map an error answer to a ``ModelError``. The body is never echoed in full."""
     try:
@@ -180,6 +187,27 @@ class GroqModel:
         """Estimate input tokens from the request size; Groq has no counting endpoint."""
         return len(json.dumps(self.body(request)).encode()) // 3 + 1_000
 
+    def _unusable(self, request: ModelRequest, body: dict[str, Any]) -> ModelTurn:
+        """Groq refused the model's own output as a malformed tool call.
+
+        That is a model answer with no usable content, not an outage: the agent
+        rejects it and gives feedback like any invalid answer. Groq reports no
+        usage, so the request is charged in full at its estimate.
+        """
+        kept = {"role": "assistant", "content": ""}
+        return ModelTurn(
+            stop_reason="other",
+            content=({"type": _BLOCK, "message": kept},),
+            text="",
+            tool_calls=(),
+            usage=Usage(
+                input_tokens=len(json.dumps(body).encode()) // 3 + 1_000,
+                output_tokens=request.max_tokens,
+            ),
+            model=request.model,
+            request_id="groq-tool-use-failed",
+        )
+
     def complete(self, request: ModelRequest) -> ModelTurn:
         body = self.body(request)
         # About 4 bytes a token; Groq counts the requested output in full.
@@ -192,6 +220,8 @@ class GroqModel:
             raise ModelError(
                 "connection", f"Groq is not reachable ({type(error).__name__})"
             ) from None
+        if response.status_code == 400 and _code(response.text) == "tool_use_failed":
+            return self._unusable(request, body)
         if response.status_code != 200:
             raise failure(
                 response.status_code, response.text[:4_000], response.headers.get("retry-after")

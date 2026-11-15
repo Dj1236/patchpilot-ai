@@ -181,3 +181,11 @@ def test_requests_are_paced_to_the_per_minute_token_limit() -> None:
         GroqModel(
             transport=httpx.MockTransport(server), api_key=KEY, tokens_per_minute=100
         ).complete(_request())
+
+
+def test_a_refused_tool_call_is_an_unusable_answer_charged_in_full() -> None:
+    body = {"error": {"message": "Failed to call a function.", "code": "tool_use_failed"}}
+    turn = Server(httpx.Response(400, json=body)).model().complete(_request())
+    assert turn.stop_reason == "other" and turn.text == "" and turn.tool_calls == ()
+    assert turn.model == MODEL and turn.usage.output_tokens == 4096
+    assert turn.usage.input_tokens > 0
