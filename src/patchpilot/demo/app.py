@@ -73,6 +73,35 @@ class JobRequest(BaseModel):
     task_id: str
 
 
+STAGES = ("queued", "investigating", "proposing", "testing", "grading", "complete", "failed")
+
+
+def job_stage(state: str, trace: Path) -> str:
+    """Where a job is, read from its state and its own trace; never guessed."""
+    if state in ("queued", "failed"):
+        return state
+    if state == "done":
+        return "complete"
+    stage = "investigating"
+    if not trace.is_file():
+        return stage
+    for line in trace.read_text(errors="replace").splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        kind = entry.get("type")
+        if kind == "finish":
+            # The run is over; the harness is now grading with the hidden tests.
+            return "grading"
+        if kind == "response":
+            turn = entry.get("turn") or {}
+            stage = "proposing" if turn.get("stop_reason") == "end_turn" else "investigating"
+        elif kind == "transition":
+            stage = "testing" if entry.get("to") == "evaluate" else "investigating"
+    return stage
+
+
 def trace_events(trace: Path) -> list[str]:
     """Readable progress lines from a run's trace. Model text is not echoed."""
     events: list[str] = []
@@ -271,6 +300,7 @@ def create_app(
             "state": job.state,
             "queue_position": ahead if job.state == "queued" else 0,
             "elapsed_seconds": round(end - job.started, 1) if job.started else 0,
+            "stage": job_stage(job.state, job.directory / f"{job.task_id}-1" / "trace.jsonl"),
             "events": trace_events(job.directory / f"{job.task_id}-1" / "trace.jsonl"),
             "result": job.result,
             "error": job.error,

@@ -33,25 +33,47 @@ can start containers; use a dedicated VM with nothing else on it.
 
 ## Host choice
 
-Oracle Cloud Always Free (Ampere A1, arm64) is the only no-cost option found
-that runs Docker. Its free allowance is now reported as 2 OCPU and 12 GB
-(previously 4 OCPU and 24 GB), and free capacity is often unavailable.
-`qwen3:8b` fits in 12 GB, but **CPU-only speed on 2 cores is unmeasured**; a
-run took 35 to 65 s on an Apple M5 and may take several minutes there, close
-to the agent's 1,200 s budget. Measure it before announcing the URL.
+The live host is an AWS Free-plan `m7i-flex.large` (2 vCPU, 8 GiB,
+Free-tier eligible) in `ap-southeast-2`, with `openai/gpt-oss-120b` on
+Groq's free tier, so the host needs no model: about 1 GB is in use during a
+run. On the Free plan AWS charges nothing and closes the account when the
+credit is used up; an AWS Budget stops the instance at 75 USD. Do not
+upgrade either account to a paid plan.
+
+With Ollama instead, `qwen3:8b` needs more memory than the largest
+Free-plan instance; the earlier Oracle Always Free option (2 OCPU, 12 GB) is
+untested.
+
+## Maintenance
+
+SSH has no inbound rule. For maintenance, add a rule for your own `/32`,
+do the work, and remove the rule, as one block (zsh):
+
+```zsh
+{ MYIP=$(curl -s -4 https://checkip.amazonaws.com)
+  aws ec2 authorize-security-group-ingress --profile patchpilot --region ap-southeast-2 --group-id sg-059e62ff649993585 --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${MYIP}/32}]" >/dev/null
+  sleep 3; ssh -i ~/.ssh/patchpilot-demo.pem ubuntu@54.252.135.177   # work here
+} always { aws ec2 revoke-security-group-ingress --profile patchpilot --region ap-southeast-2 --group-id sg-059e62ff649993585 --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${MYIP}/32}]" >/dev/null; }
+```
+
+To read the access code into the clipboard without printing it, replace the
+`ssh` line with:
+`ssh -i ~/.ssh/patchpilot-demo.pem ubuntu@54.252.135.177 "sudo sed -n 's/^PATCHPILOT_DEMO_ACCESS_CODE=//p' /etc/patchpilot/demo.env" | tr -d '\n' | pbcopy`.
+To rotate it, on the host: replace that line with a new `openssl rand -hex 8`
+value and `sudo systemctl restart patchpilot-demo`.
 
 ## Steps (Ubuntu 24.04, arm64 or x86-64)
 
 ```bash
-# 1. Account and VM (owner): Oracle Cloud sign-up, then Compute > Instance,
-#    shape VM.Standard.A1.Flex, 2 OCPU / 12 GB, Ubuntu 24.04. Open ports 80
-#    and 443 in the VCN security list. Keep the SSH key private.
+# 1. VM (owner): an instance with Docker support, Ubuntu 24.04, ports 80 and
+#    443 open, SSH only from your own address. Keep the SSH key private.
 
 # 2. Packages
 sudo apt-get update && sudo apt-get install -y docker.io git curl caddy
+sudo systemctl enable --now docker
+# Ollama provider only (skip with Groq):
 curl -fsSL https://ollama.com/install.sh | sh        # read the script before running it
-sudo systemctl enable --now docker ollama
-ollama pull qwen3:8b
+sudo systemctl enable --now ollama && ollama pull qwen3:8b
 
 # 3. Service account and code
 sudo useradd --system --create-home --home-dir /var/lib/patchpilot patchpilot

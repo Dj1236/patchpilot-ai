@@ -40,6 +40,8 @@ environment, has not run them (see [ci-status.md](ci-status.md)).
 | Budget bypass by restarting | Limits and counters restored from the checkpoint; stale checkpoints refused | `tests/unit/test_resume.py` |
 | Untrusted model output | Strict proposal schema; edits must match exactly once; patch policy in code | `tests/unit/test_patch.py`, `test_baseline.py` |
 | Rate limits and outages | Pacing, a cap of 8 generation attempts, one bounded retry, quota not retried | `test_llm_gemini.py` |
+| Groq free-tier limits | Requests paced to 8,000 tokens a minute; oldest tool output omitted and output lowered (never below 1,024) to fit one request; a request that cannot fit fails at once; a daily quota stops the run | `tests/unit/test_llm_groq.py` |
+| Groq key exposure | Read only from `GROQ_API_KEY`; sent only in the `Authorization` header to a fixed URL; redacted from traces; never in error text | `test_llm_groq.py` |
 
 ## GitHub writes
 
@@ -58,6 +60,16 @@ Two findings from automated security review of the submission code were
 fixed: a proposal body that could cut the diff before review, and changed
 files whose hidden characters could display differently from the pushed
 bytes.
+
+## Hosted demo
+
+| Threat | Control | Evidence |
+|---|---|---|
+| Anonymous use and quota abuse | Shared access code (constant-time compare); 2 runs per address an hour, 5 a day, a queue of 1, one run at a time | `tests/unit/test_demo_app.py` |
+| Arbitrary input | Only the four built-in task ids; 4 KB bodies at the proxy; no OpenAPI or docs endpoints | `test_demo_app.py`, `deploy/Caddyfile` |
+| Network exposure | Only 80 and 443 open; SSH has no rule except during maintenance; app, Docker and Ollama ports bound to 127.0.0.1 | [hosted-demo.md](hosted-demo.md) |
+| Key on the host | `/etc/patchpilot/demo.env`, `600 root:root`, read by systemd; written through stdin; checked absent from logs and run files | [hosted-demo.md](hosted-demo.md) |
+| Spend | AWS Free plan (no charges); a 75 USD budget stops the instance; Groq free tier only | [hosted-demo.md](hosted-demo.md) |
 
 ## Residual risks
 
@@ -80,3 +92,8 @@ bytes.
   documentation.
 - Free-tier Gemini may use prompts for product improvement; only synthetic
   or approved public code may be sent.
+- Hosted demo: the service account is in the `docker` group, which is
+  root-equivalent on that host; the VM runs nothing else. The access code is
+  one shared secret, not per-user accounts. Groq receives the prompts, which
+  contain only the synthetic task code. There is no WAF; the limits above are
+  the only abuse controls.
