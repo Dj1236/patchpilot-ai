@@ -10,7 +10,7 @@ from patchpilot.agent.baseline import RunLimits
 from patchpilot.agent.trace import secrets_from_environment
 from patchpilot.llm.base import APPROVED_MODELS, PINNED_MODELS, ModelError, ModelRequest, ToolSpec
 from patchpilot.llm.budget import prices_for
-from patchpilot.llm.groq_client import GROQ_URL, GroqModel
+from patchpilot.llm.groq_client import GROQ_URL, OMITTED, GroqModel, estimated_tokens, fit
 
 MODEL = "openai/gpt-oss-120b"
 KEY = "gsk_test_not_a_real_key_0123456789"
@@ -177,7 +177,7 @@ def test_requests_are_paced_to_the_per_minute_token_limit() -> None:
         model.complete(_request())
     assert len(server.requests) == 3
     assert waits == [60.0], "the third request waited for the first to leave the window"
-    with pytest.raises(ModelError, match="larger than"):
+    with pytest.raises(ModelError, match="more than Groq's free limit"):
         GroqModel(
             transport=httpx.MockTransport(server), api_key=KEY, tokens_per_minute=100
         ).complete(_request())
@@ -194,3 +194,73 @@ def test_a_refused_tool_call_is_the_models_answer_charged_in_full() -> None:
     assert empty.text == "" and empty.content[0]["message"]["content"] == "(no answer)"
     assert empty.model == MODEL and empty.usage.output_tokens == 4096
     assert empty.usage.input_tokens > 0
+
+
+def _conversation(reads: int, size: int) -> dict[str, Any]:
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": "rules"},
+        {"role": "user", "content": "the task"},
+    ]
+    for n in range(reads):
+        call = {"id": f"fc_{n}", "type": "function", "function": {"name": "read_file"}}
+        messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
+        messages.append({"role": "tool", "tool_call_id": f"fc_{n}", "content": "x" * size})
+    messages.append({"role": "user", "content": "feedback"})
+    return {"model": MODEL, "messages": messages, "max_completion_tokens": 2048}
+
+
+def test_old_tool_output_is_omitted_oldest_first_until_the_request_fits() -> None:
+    body = _conversation(reads=4, size=4_000)
+    fitted = fit(body, 7_500)
+    contents = [m["content"] for m in fitted["messages"] if m["role"] == "tool"]
+    assert estimated_tokens(fitted) + fitted["max_completion_tokens"] <= 7_500
+    assert contents[0] == OMITTED and contents[-1] == "x" * 4_000, "the newest result is kept"
+    kept = [m["content"] for m in fitted["messages"] if m["role"] != "tool"]
+    assert kept == [m["content"] for m in body["messages"] if m["role"] != "tool"]
+    assert body["messages"][3]["content"] == "x" * 4_000, "the agent's own messages are not changed"
+    small = _conversation(reads=2, size=100)
+    assert fit(small, 7_500) == small
+
+
+def test_a_request_that_cannot_fit_fails_at_once_without_waiting() -> None:
+    waits: list[float] = []
+    server = Server(_answer("{}"))
+    model = GroqModel(
+        transport=httpx.MockTransport(server),
+        api_key=KEY,
+        tokens_per_minute=7_500,
+        sleep=waits.append,
+    )
+    huge = ({"role": "user", "content": "y" * 40_000},)
+    with pytest.raises(ModelError, match="more than Groq's free limit") as caught:
+        model.complete(_request(huge))
+    assert caught.value.kind == "api_error" and caught.value.retry_after_seconds == 0
+    assert waits == [] and server.requests == []
+
+
+def test_an_answer_wrapped_in_a_json_tool_call_is_unwrapped() -> None:
+    proposal = {"summary": "fix", "edits": []}
+    raw = json.dumps({"name": "json", "arguments": proposal})
+    error = {"message": "Failed to call a function.", "code": "tool_use_failed"}
+    response = httpx.Response(400, json={"error": {**error, "failed_generation": raw}})
+    answer = Server(response).model().complete(_request())
+    assert json.loads(answer.text) == proposal
+    other = json.dumps({"name": "read_file", "arguments": {"path": "a"}})
+    response = httpx.Response(400, json={"error": {**error, "failed_generation": other}})
+    assert Server(response).model().complete(_request()).text == other
+
+
+def test_output_is_lowered_to_fit_but_never_below_the_floor() -> None:
+    body = _conversation(reads=1, size=14_000)
+    fitted = fit(body, 7_500)
+    assert 1_024 <= fitted["max_completion_tokens"] < 2_048
+    assert estimated_tokens(fitted) + fitted["max_completion_tokens"] <= 7_500
+    assert fit(_conversation(reads=1, size=30_000), 7_500)["max_completion_tokens"] == 1_024
+
+
+def test_the_estimate_is_calibrated_by_the_reported_prompt_count() -> None:
+    server = Server(_answer("{}"), _answer("{}"))
+    model = server.model()
+    model.complete(_request())
+    sent = len(json.dumps(server.body(0)).encode())
+    assert model._per_byte == pytest.approx(max(0.2, 120 / sent * 1.1))
