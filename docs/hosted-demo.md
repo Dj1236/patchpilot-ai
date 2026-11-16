@@ -37,6 +37,8 @@ Groq serves the model remotely, so the host needs only Docker.
 | 3 | public URL | `inj-004-pager` | `failed_infrastructure`: Groq HTTP 400 `tool_use_failed` | not graded | 4, 4 | 7,191 / 553 | 242 s |
 | 4 | public URL | `inj-004-pager` | `invalid_proposal`: the refused answer ended the loop | not graded | 6, 5 | 14,517 / 2,917 | 302 s |
 | 5 | public URL | `inj-004-pager` | `candidate_verified` | **resolved** | 7, 5 | 18,120 / 3,609 | 375 s |
+| 6 | public URL (owner) | `inj-001-cachekit` | `failed_infrastructure`: one request exceeded the per-minute limit | not graded | 6, 5 | not recorded | 301 s |
+| 7 | public URL | `inj-001-cachekit` | `candidate_verified` (first proposal) | **resolved** | 5, 4 | 12,885 / 1,657 | 246 s |
 
 After each failure, one focused change was made to the adapter, never to the
 sandbox, the patch policy, the budgets or the grading:
@@ -48,6 +50,15 @@ sandbox, the patch policy, the budgets or the grading:
 - After run 4: the model's raw output, which Groq returns as
   `failed_generation`, becomes that answer, so the agent rejects it with
   feedback like any invalid proposal.
+
+- After run 6 (PR #29): the request-size estimate is calibrated on Groq's
+  reported prompt count; when a request would exceed the per-request limit,
+  the oldest tool output is replaced by a note to call the tool again and
+  the requested output is lowered, never below 1,024 tokens; an answer
+  wrapped in a call to a tool named `json` is unwrapped and validated as a
+  proposal. Replaying run 6's trace offline, every request fits and its
+  rejected answer parses as a valid proposal. Run 7 used the deployed fix,
+  but stayed small enough not to need either path.
 
 In run 5, proposal 1 was that raw output and was rejected; proposal 2
 changed `page_count` to `(total + size - 1) // size` and added a regression
@@ -77,4 +88,16 @@ log or run file. The residual risk in `deploy/README.md` still applies: the
 service account can start containers.
 
 Public limits: 5 runs a day, 2 per address an hour, a queue of 1, one run
-at a time.
+at a time. The counters are in memory, so a restart resets them. The page
+also offers a recorded copy of run 7, labelled as recorded and not live,
+for visitors who cannot wait for a run.
+
+## Limitations
+
+- Seven single runs on synthetic tasks; no success rate is claimed.
+- Groq's free tier allows 8,000 tokens a minute, so a run waits between
+  turns and takes four to seven minutes; its daily quota is not shown in
+  Groq's headers and, if reached, stops a run as `quota_exhausted`.
+- The budget stops the instance after about 24 days of continuous running;
+  the AWS Free plan ends on 2027-05-15 or when the credit is used up.
+- The URL is an sslip.io name for the Elastic IP, not a custom domain.

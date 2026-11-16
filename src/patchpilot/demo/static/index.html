@@ -10,59 +10,85 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
 .wrap{width:min(1000px,100% - 32px);margin:0 auto;padding:40px 0 64px}
 a{color:var(--sig)}h1{font-size:clamp(28px,4vw,40px);letter-spacing:-.03em;margin:8px 0 6px}
-.k{font:500 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--sig)}
+.k{font:500 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--sig);margin:0}
 .note{color:var(--ink2);margin:0 0 20px;max-width:46em}
-.card{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:20px;margin-top:16px}
+.card{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:20px;margin-top:16px;min-width:0}
 label{display:block;font-size:14px;color:var(--ink2);margin:0 0 6px}
 select,input,button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line2);border-radius:10px;height:44px;padding:0 12px}
-select{min-width:min(100%,420px);max-width:100%}.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+select{min-width:min(100%,420px);max-width:100%}.row{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:12px}.row>div{min-width:0;max-width:100%}
 button{background:var(--ink);color:var(--bg);border:0;font-weight:600;padding:0 18px;cursor:pointer}button:disabled{opacity:.4;cursor:default}
+button.ghost{background:transparent;color:var(--ink2);border:1px solid var(--line2);font-weight:500}
+.code{display:flex;gap:6px}.code input{width:12em;min-width:0}.code button{padding:0 12px}
 :focus-visible{outline:2px solid var(--sig);outline-offset:2px}
-.state{font:600 13px var(--mono);text-transform:uppercase;letter-spacing:.08em}
-.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.dim{color:var(--ink3)}
-ol.log{margin:10px 0 0;padding:0 0 0 36px;font:13px/1.7 var(--mono);color:var(--ink2);max-height:260px;overflow:auto;overflow-wrap:anywhere}
-pre{margin:10px 0 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0a0d11;overflow:auto;font:12.5px/1.6 var(--mono)}
-pre .a{color:#c9f2dc}pre .h{color:#b49dff}
-table{width:100%;border-collapse:collapse;font-size:14px;margin-top:10px}td,th{text-align:left;padding:8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}th{font:500 11px var(--mono);text-transform:uppercase;color:var(--ink3)}
-.stats{font:13px var(--mono);color:var(--ink2);margin-top:10px}
+.dim{color:var(--ink3)}
+ol.stages{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0;padding:0;font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.06em}
+ol.stages li{padding:6px 10px;border:1px solid var(--line2);border-radius:999px;color:var(--ink3)}
+ol.stages li.done{color:var(--ok);border-color:#24493a}ol.stages li[aria-current="step"]{color:var(--bg);background:var(--sig);border-color:var(--sig)}
+ol.stages li.fail{color:var(--bg);background:var(--bad);border-color:var(--bad)}
+.banner{border-radius:12px;padding:16px 18px;margin:8px 0 0;border:1px solid var(--line2)}
+.banner.ok{background:#0f2a20;border-color:#24493a}.banner.bad{background:#2a1212;border-color:#5a2420}
+.banner b{display:block;font-size:20px;letter-spacing:-.01em}.banner span{color:var(--ink2)}
+.recorded{font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--warn);border:1px solid #5a4520;border-radius:999px;padding:3px 10px;display:inline-block;margin:10px 0 0}
+details{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:0 12px}
+summary{cursor:pointer;padding:10px 0;font-weight:600}
+ol.log{margin:0 0 12px;padding:0 0 0 36px;font:13px/1.7 var(--mono);color:var(--ink2);max-height:260px;overflow:auto;overflow-wrap:anywhere}
+pre{margin:0 0 12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0a0d11;overflow:auto;max-height:480px;font:12.5px/1.6 var(--mono);tab-size:4}
+pre .a{color:#c9f2dc}pre .r{color:#ffb4ae}pre .h{color:#b49dff}pre .f{color:var(--ink3)}
+h3.k{margin-top:18px}
+.files{margin:8px 0 0;padding:0;list-style:none;font:13px var(--mono)}.files li{padding:4px 0;overflow-wrap:anywhere}
+.tag{display:inline-block;white-space:nowrap;font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;border-radius:6px;padding:1px 6px;margin-left:8px;border:1px solid var(--line2);color:var(--ink2)}
+.tag.test{color:var(--sig);border-color:#1f4b45}
+.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0;min-width:480px}td,th{text-align:left;padding:8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere;vertical-align:top}th{font:500 11px var(--mono);text-transform:uppercase;color:var(--ink3)}
+.stats{font:13px var(--mono);color:var(--ink2);margin-top:10px;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
 <main class="wrap">
   <p class="k">PatchPilot AI · live demo</p>
   <h1>Run a real repair on a synthetic bug.</h1>
-  <p class="note">A real model (<b id="model-name">loading</b>) investigates the task with read-only tools and proposes a patch. PatchPilot checks it in a locked-down Docker sandbox, then grades it with hidden tests. Only the four built-in synthetic tasks can be run, one job at a time; a run can take several minutes. Nothing is written to GitHub. <a href="https://patchpilot-ai-site.vercel.app/">About the project</a></p>
+  <p class="note">A real model (<b id="model-name">loading</b>) investigates the task with read-only tools and proposes a patch. PatchPilot checks it in a locked-down Docker sandbox, then grades it with hidden tests the model never sees. Only the four built-in synthetic tasks can be run, one job at a time, with a small daily limit; a run takes about four to seven minutes. Nothing is written to GitHub. <a href="https://patchpilot-ai-site.vercel.app/">About the project</a></p>
 
   <section class="card" aria-labelledby="start">
     <h2 id="start" class="k">Start a run</h2>
     <div class="row">
       <div><label for="task">Synthetic task</label><select id="task"></select></div>
-      <div id="code-wrap" hidden><label for="code">Access code</label><input id="code" autocomplete="off" spellcheck="false"></div>
+      <div id="code-wrap" hidden><label for="code">Access code</label>
+        <div class="code"><input id="code" type="password" autocomplete="off" spellcheck="false" autocapitalize="off"><button id="show" class="ghost" type="button" aria-pressed="false" aria-controls="code">Show</button></div></div>
       <button id="go" type="button">Run repair</button>
+      <button id="replay" class="ghost" type="button">Show a recorded run</button>
     </div>
-    <p id="msg" class="dim" aria-live="polite"></p>
+    <p id="msg" class="dim" role="status" aria-live="polite"></p>
   </section>
 
   <section class="card" id="job" hidden aria-labelledby="progress">
     <h2 id="progress" class="k">Progress</h2>
-    <p><span id="state" class="state"></span> <span id="elapsed" class="dim"></span></p>
-    <ol class="log" id="log" aria-live="polite"></ol>
+    <ol class="stages" id="stages" aria-label="Run stages"></ol>
+    <p id="elapsed" class="dim" aria-live="polite"></p>
+    <details><summary>Technical log</summary><ol class="log" id="log"></ol></details>
   </section>
 
   <section class="card" id="result" hidden aria-labelledby="outcome">
     <h2 id="outcome" class="k">Outcome</h2>
-    <p id="verdict"></p>
+    <p id="recorded-tag" class="recorded" hidden></p>
+    <div id="banner" class="banner"></div>
     <p class="stats" id="stats"></p>
-    <table><thead><tr><th>Proposal</th><th>Outcome</th><th>Detail</th></tr></thead><tbody id="proposals"></tbody></table>
-    <table id="checks-table"><thead><tr><th>Sandbox check</th><th>Expected</th><th>Held</th></tr></thead><tbody id="checks"></tbody></table>
-    <pre id="diff" aria-label="Patch diff"></pre>
+    <h3 class="k">Changed files</h3>
+    <ul class="files" id="files"></ul>
+    <details open><summary>Patch (unified diff)</summary><pre id="diff" tabindex="0" aria-label="Patch diff"></pre></details>
+    <details><summary>Proposals and sandbox checks</summary>
+      <div class="scroll"><table><thead><tr><th>Proposal</th><th>Outcome</th><th>Detail</th></tr></thead><tbody id="proposals"></tbody></table></div>
+      <div class="scroll" id="checks-wrap"><table><thead><tr><th>Sandbox check</th><th>Expected</th><th>Held</th></tr></thead><tbody id="checks"></tbody></table></div>
+    </details>
   </section>
 </main>
+<script type="application/json" id="recorded-run">{"job_id":"9e5f888e72f338585912bfb0","task_id":"inj-001-cachekit","recorded":"2026-11-16 through the public URL, commit 21757d4","events":["tool call: list_files {\"limit\": 1000}","tool call: read_file {\"max_lines\": 400, \"path\": \"src/cachekit/lru.py\", \"start_line\": 1}","tool call: read_file {\"path\": \"src/cachekit/lru.py\", \"start_line\": 40}","tool call: read_file {\"max_lines\": 400, \"path\": \"tests/test_lru.py\", \"start_line\": 1}","model answered with a proposal","propose -> evaluate: the model gave a proposal","evaluate -> done: candidate_verified: the regression tests fail before the patch and all tests pass after it","run finished"],"result":{"status":"candidate_verified","detail":"the regression tests fail before the patch and all tests pass after it","resolved":true,"diff":"diff --git a/src/cachekit/lru.py b/src/cachekit/lru.py\n--- a/src/cachekit/lru.py\n+++ b/src/cachekit/lru.py\n@@ -62,6 +62,7 @@\n         expires_at = None if self._ttl is None else self._clock() + self._ttl\n         if key in self._entries:\n             self._entries[key] = (value, expires_at)\n+            self._entries.move_to_end(key)\n             return\n         self._purge_expired()\n         while len(self._entries) >= self._capacity:\ndiff --git a/tests/test_lru_put_recency.py b/tests/test_lru_put_recency.py\nnew file mode 100644\n--- /dev/null\n+++ b/tests/test_lru_put_recency.py\n@@ -0,0 +1,12 @@\n+import pytest\n+\n+from cachekit import LRUCache\n+\n+\n+def test_put_updates_recency():\n+    cache = LRUCache(capacity=2)\n+    cache.put(\"a\", 1)\n+    cache.put(\"b\", 2)\n+    cache.put(\"a\", 10)  # rewrite existing key\n+    cache.put(\"c\", 3)\n+    assert \"a\" in cache\n","checks":[{"name":"regression tests on the original code","expected":"at least one test fails","held":true},{"name":"regression tests on the patched code","expected":"all tests pass","held":true},{"name":"existing tests 'tests' on the patched code","expected":"all tests pass","held":true}],"proposals":[{"outcome":"candidate_verified","detail":"the regression tests fail before the patch and all tests pass after it"}],"model":"openai/gpt-oss-120b","model_turns":5,"tool_calls":4,"tokens":{"input":12885,"output":1657},"duration_seconds":245.9}}</script>
 <script>
 const $ = (id) => document.getElementById(id);
-const text = (el, value) => { el.textContent = value; return el; };
-const row = (cells) => { const tr = document.createElement('tr'); cells.forEach((c) => tr.appendChild(text(document.createElement('td'), c))); return tr; };
-let timer = 0;
+const text = (node, value) => { node.textContent = value; return node; };
+const el = (tag, value, cls) => { const node = text(document.createElement(tag), value); if (cls) node.className = cls; return node; };
+const row = (cells) => { const tr = document.createElement('tr'); cells.forEach((c) => tr.appendChild(el('td', c))); return tr; };
+const STAGES = ['investigating', 'proposing', 'testing', 'grading', 'complete'];
+let timer = 0; let busy = false;
 
 async function init() {
   const [health, tasks] = await Promise.all([fetch('/api/health').then((r) => r.json()), fetch('/api/tasks').then((r) => r.json())]);
@@ -71,42 +97,103 @@ async function init() {
   tasks.forEach((t) => { const o = document.createElement('option'); o.value = t.id; o.textContent = `${t.id}: ${t.title}`; $('task').appendChild(o); });
 }
 
+function renderStages(stage) {
+  const list = $('stages'); list.replaceChildren();
+  if (stage === 'queued') { list.appendChild(el('li', 'Queued')).setAttribute('aria-current', 'step'); return; }
+  const at = STAGES.indexOf(stage);
+  STAGES.forEach((name, i) => {
+    const li = el('li', name[0].toUpperCase() + name.slice(1));
+    if (stage === 'complete' || (at >= 0 && i < at)) li.className = 'done';
+    else if (i === at) li.setAttribute('aria-current', 'step');
+    list.appendChild(li);
+  });
+  if (stage === 'failed') list.appendChild(el('li', 'Failed', 'fail'));
+}
+
+function changedFiles(diff) {
+  return diff.split('\n').filter((l) => l.startsWith('+++ ')).map((l) => l.slice(4).replace(/^b\//, '')).filter((p) => p !== '/dev/null');
+}
+
 function renderDiff(diff) {
   const pre = $('diff'); pre.replaceChildren();
   diff.split('\n').forEach((line) => {
-    const s = document.createElement('span');
-    s.className = line.startsWith('@@') ? 'h' : (line.startsWith('+') && !line.startsWith('+++') ? 'a' : '');
-    s.textContent = line + '\n'; pre.appendChild(s);
+    let cls = '';
+    if (line.startsWith('@@')) cls = 'h';
+    else if (/^(diff |\+\+\+|---|new file|index )/.test(line)) cls = 'f';
+    else if (line.startsWith('+')) cls = 'a';
+    else if (line.startsWith('-')) cls = 'r';
+    pre.appendChild(el('span', line + '\n', cls));
   });
 }
 
-async function poll(id) {
-  const r = await fetch(`/api/jobs/${id}`);
-  if (!r.ok) { text($('msg'), 'The job is no longer known to the server.'); clearInterval(timer); return; }
-  const job = await r.json();
-  const s = $('state'); text(s, job.state); s.className = 'state ' + ({ done: 'ok', failed: 'bad' }[job.state] || 'warn');
-  text($('elapsed'), job.state === 'queued' ? `position ${job.queue_position} in the queue` : `${job.elapsed_seconds} s`);
-  $('log').replaceChildren(...job.events.map((e) => text(document.createElement('li'), e)));
-  if (job.state !== 'done' && job.state !== 'failed') return;
-  clearInterval(timer); $('go').disabled = false;
-  if (job.state === 'failed') { text($('msg'), `The run failed: ${job.error}`); return; }
-  const res = job.result; $('result').hidden = false;
-  const verdict = res.resolved === true ? 'Resolved: the independent hidden tests pass.' : res.resolved === false ? 'Not resolved by the hidden tests.' : 'Not graded.';
-  text($('verdict'), `${res.status} · ${verdict}`).className = res.resolved ? 'ok' : 'bad';
+function renderResult(res, recorded) {
+  $('result').hidden = false;
+  const tag = $('recorded-tag'); tag.hidden = !recorded; text(tag, recorded);
+  const banner = $('banner'); banner.replaceChildren();
+  const good = res.resolved === true;
+  banner.className = 'banner ' + (good ? 'ok' : 'bad');
+  banner.appendChild(el('b', good ? 'Fixed: the independent hidden tests pass.' : res.resolved === false ? 'Not fixed: the hidden tests fail.' : 'No verified patch, so nothing was graded.'));
+  banner.appendChild(el('span', `Agent status: ${res.status}. ${res.detail || ''}`));
   text($('stats'), `model ${res.model} · ${res.model_turns} model turns · ${res.tool_calls} tool calls · ${res.tokens.input} in / ${res.tokens.output} out tokens · ${res.duration_seconds} s`);
+  const files = changedFiles(res.diff || '');
+  $('files').replaceChildren(...(files.length ? files.map((f) => {
+    const test = f.startsWith('tests/'); const li = el('li', f);
+    li.appendChild(el('span', test ? 'regression test' : 'source', test ? 'tag test' : 'tag')); return li;
+  }) : [el('li', 'No files changed.', 'dim')]));
+  renderDiff(res.diff || '(no patch)');
   $('proposals').replaceChildren(...res.proposals.map((p, i) => row([String(i + 1), p.outcome, p.detail])));
   $('checks').replaceChildren(...res.checks.map((c) => row([c.name, c.expected, c.held ? 'yes' : 'no'])));
-  $('checks-table').hidden = res.checks.length === 0;
-  renderDiff(res.diff || '(no patch)');
+  $('checks-wrap').hidden = res.checks.length === 0;
 }
 
+function finish() { clearInterval(timer); busy = false; $('go').disabled = false; $('replay').disabled = false; }
+
+async function poll(id) {
+  let job;
+  try {
+    const r = await fetch(`/api/jobs/${id}`);
+    if (!r.ok) { text($('msg'), 'The server no longer knows this job (it may have restarted).'); finish(); return; }
+    job = await r.json();
+  } catch (e) { text($('msg'), 'Lost contact with the server; still trying.'); return; }
+  renderStages(job.stage);
+  text($('elapsed'), job.state === 'queued' ? `Waiting: position ${job.queue_position} in the queue.` : `${job.elapsed_seconds} s elapsed`);
+  $('log').replaceChildren(...job.events.map((e) => el('li', e)));
+  if (job.state !== 'done' && job.state !== 'failed') return;
+  finish(); text($('msg'), '');
+  if (job.state === 'failed') { text($('msg'), `The run could not complete: ${job.error}`); return; }
+  renderResult(job.result, '');
+}
+
+$('show').addEventListener('click', () => {
+  const shown = $('code').type === 'text';
+  $('code').type = shown ? 'password' : 'text';
+  $('show').setAttribute('aria-pressed', String(!shown)); text($('show'), shown ? 'Show' : 'Hide');
+});
+
+$('replay').addEventListener('click', () => {
+  if (busy) return;
+  const rec = JSON.parse($('recorded-run').textContent);
+  $('job').hidden = false; renderStages('complete');
+  text($('elapsed'), `Recorded run ${rec.job_id} on ${rec.task_id}, ${rec.recorded}. Nothing is running now.`);
+  $('log').replaceChildren(...rec.events.map((e) => el('li', e)));
+  renderResult(rec.result, `Recorded run · ${rec.recorded} · not live`);
+  $('result').scrollIntoView({ block: 'start' });
+});
+
 $('go').addEventListener('click', async () => {
-  $('go').disabled = true; $('result').hidden = true; text($('msg'), '');
-  const r = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Demo-Code': $('code').value }, body: JSON.stringify({ task_id: $('task').value }) });
-  const body = await r.json().catch(() => ({}));
-  if (!r.ok) { text($('msg'), body.detail || `Refused (HTTP ${r.status})`); $('go').disabled = false; return; }
-  $('job').hidden = false; clearInterval(timer);
-  timer = setInterval(() => poll(body.job_id), 2000); poll(body.job_id);
+  $('go').disabled = true; $('replay').disabled = true; busy = true; $('result').hidden = true; text($('msg'), 'Submitting.');
+  let r; let body = {};
+  try {
+    r = await fetch('/api/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Demo-Code': $('code').value }, body: JSON.stringify({ task_id: $('task').value }) });
+    body = await r.json().catch(() => ({}));
+  } catch (e) { text($('msg'), 'The demo server is not reachable.'); finish(); return; }
+  if (!r.ok) {
+    const why = { 401: 'That access code is not valid.', 429: body.detail || 'A usage limit was reached; please try later.', 503: body.detail || 'The queue is full; try again in a few minutes.' }[r.status];
+    text($('msg'), why || body.detail || `Refused (HTTP ${r.status})`); finish(); return;
+  }
+  text($('msg'), 'Running. A run takes about four to seven minutes; each stage shows below.');
+  $('job').hidden = false; renderStages('queued'); clearInterval(timer);
+  timer = setInterval(() => poll(body.job_id), 3000); poll(body.job_id);
 });
 init().catch(() => text($('msg'), 'The demo server is not reachable.'));
 </script>

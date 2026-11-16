@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from patchpilot.demo.app import Limits, create_app, demo_provider, trace_events
+from patchpilot.demo.app import Limits, create_app, demo_provider, job_stage, trace_events
 
 RESULT = {
     "status": "candidate_verified",
@@ -80,6 +80,7 @@ def test_a_job_runs_and_reports_progress_and_result(tmp_path: Path) -> None:
     assert accepted.status_code == 202
     job = _wait(client, accepted.json()["job_id"])
     assert job["state"] == "done" and job["result"]["resolved"] is True
+    assert job["stage"] == "complete"
     assert job["events"] == [
         'tool call: read_file {"path": "a.py"}',
         "propose -> evaluate: the model gave a proposal",
@@ -179,3 +180,40 @@ def test_health_names_the_configured_model(tmp_path: Path, monkeypatch: Any) -> 
     monkeypatch.setenv("PATCHPILOT_DEMO_PROVIDER", "groq")
     health = _client(tmp_path / "groq").get("/api/health").json()
     assert health["model"] == "openai/gpt-oss-120b (Groq free tier)"
+
+
+def _trace(tmp_path: Path, *entries: dict[str, Any]) -> Path:
+    path = tmp_path / "trace.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
+    return path
+
+
+def test_the_stage_is_read_from_the_job_state_and_its_trace(tmp_path: Path) -> None:
+    missing = tmp_path / "none.jsonl"
+    assert job_stage("queued", missing) == "queued"
+    assert job_stage("failed", missing) == "failed"
+    assert job_stage("done", missing) == "complete"
+    assert job_stage("running", missing) == "investigating"
+    tool = {"type": "response", "turn": {"stop_reason": "tool_use"}}
+    answer = {"type": "response", "turn": {"stop_reason": "end_turn"}}
+    evaluate = {"type": "transition", "from": "propose", "to": "evaluate"}
+    feedback = {"type": "transition", "from": "evaluate", "to": "feedback"}
+    assert job_stage("running", _trace(tmp_path, tool)) == "investigating"
+    assert job_stage("running", _trace(tmp_path, tool, answer)) == "proposing"
+    assert job_stage("running", _trace(tmp_path, tool, answer, evaluate)) == "testing"
+    assert job_stage("running", _trace(tmp_path, answer, evaluate, feedback)) == "investigating"
+    assert job_stage("running", _trace(tmp_path, answer, evaluate, {"type": "finish"})) == "grading"
+
+
+def test_the_recorded_run_is_real_labelled_and_safe_to_embed(tmp_path: Path) -> None:
+    page = _client(tmp_path).get("/").text
+    tag = '<script type="application/json" id="recorded-run">'
+    start = page.index(tag) + len(tag)
+    blob = page[start : page.index("</script>", start)]
+    record = json.loads(blob)
+    assert record["job_id"] == "9e5f888e72f338585912bfb0"
+    assert record["result"]["status"] == "candidate_verified"
+    assert record["result"]["resolved"] is True
+    assert "2026-11-16" in record["recorded"] and "not live" in page
+    assert "</" not in blob
+    assert 'type="password"' in page and "innerHTML" not in page

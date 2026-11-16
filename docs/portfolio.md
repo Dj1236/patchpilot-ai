@@ -48,7 +48,12 @@ both modes through the real sandbox and grading: baseline resolves 8 of 20,
 repair 16 of 20. **These are hand-written answers that exercise the
 pipeline, not a model's success rate.** Free-tier Gemini answered every
 request with HTTP 503; one live repair with a local open-weight model
-(`qwen3:8b`) then resolved `inj-001-cachekit` on its second proposal.
+(`qwen3:8b`) then resolved `inj-001-cachekit` on its second proposal. The
+hosted demo uses `openai/gpt-oss-120b` on Groq's free tier on an AWS
+Free-plan instance: of seven live Groq runs, three were resolved by the
+hidden tests and four failed, each failure reported with its cause
+([hosted-demo.md](hosted-demo.md)). These are single runs, not a success
+rate.
 
 ## Lessons
 
@@ -65,7 +70,7 @@ request with HTTP 503; one live repair with a local open-weight model
 
 - Built an autonomous bug-fixing agent in Python that proposes, sandboxes
   and verifies patches, with allowlists, path confinement, patch policy and
-  budgets enforced in code rather than prompts; about 1,050 tests, 94%
+  budgets enforced in code rather than prompts; about 1,100 tests, 93%
   coverage, strict typing.
 - Designed independent evaluation that separates agent-reported
   verification from hidden-test grading, with four fixture tasks and a

@@ -28,7 +28,7 @@ AWS Free-plan `m7i-flex.large` with `openai/gpt-oss-120b` on Groq's free tier
 (`PATCHPILOT_PROVIDER=groq`, `docs/hosted-demo.md`); keep the AWS account on
 the Free plan. See `docs/release-checklist.md`.
 PatchPilot does not load `.env`; the key comes from the process environment.
-Milestone 6 is not started and waits for measured live results. Hosted Linux CI passed on `469074e` (run 43586146851,
+Hosted Linux CI last passed on `main` at `21757d4` (run 43783603592,
 sandbox tests included); see `docs/ci-status.md`. Describe CI as green only
 for a run that completed successfully, never for a cancelled one. Each
 later milestone needs the owner's explicit authorization before work starts.

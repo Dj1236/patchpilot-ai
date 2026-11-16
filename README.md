@@ -51,7 +51,7 @@ feedback from the agent's own checks). See
 ```
 uv sync
 colima start                                   # macOS: the sandbox needs a Docker engine
-uv run pytest                                  # about 1,050 tests, a few minutes
+uv run pytest                                  # about 1,100 tests, a few minutes
 uv run patchpilot benchmark --scripted         # offline baseline-versus-repair comparison
 ```
 
@@ -66,7 +66,7 @@ configuration reference and troubleshooting.
   are hand-written answers, **not a model's success rate**; the difference
   is built into the scenarios. See [evaluation.md](docs/evaluation.md) and
   `evals/results/`.
-- **Quality gates:** ruff, strict mypy, about 1,060 tests including
+- **Quality gates:** ruff, strict mypy, about 1,100 tests including
   container attacks on the sandbox, 94% coverage locally. Hosted Linux CI
   passed on `469074e` ([run 43586146851](https://github.com/Dj1236/patchpilot-ai/actions/runs/43586146851)), with the Docker sandbox
   tests running on the runner.

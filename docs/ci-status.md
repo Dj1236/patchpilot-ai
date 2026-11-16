@@ -2,6 +2,11 @@
 
 ## Current state
 
+The latest hosted run on `main`, run
+[`43783603592`](https://github.com/Dj1236/patchpilot-ai/actions/runs/43783603592)
+on `21757d4` (2026-11-16), passed. The record below is the first passing
+run, kept as evidence.
+
 **Hosted Linux CI has passed** on `main` commit `469074e`:
 GitHub Actions run [`43586146851`](https://github.com/Dj1236/patchpilot-ai/actions/runs/43586146851), attempt 3, on 2026-11-14.
 Ruff, formatting and strict mypy passed, and `pytest` reported 1,061 passed,
